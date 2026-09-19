@@ -20,6 +20,16 @@ interface Samples {
   readonly head: number[];
 }
 
+type NonEmptyArray<T> = readonly [T, ...T[]];
+
+function isNonEmpty<T>(values: readonly T[]): values is NonEmptyArray<T> {
+  return values.length > 0;
+}
+
+function assertNonEmpty<T>(values: readonly T[], message: string): asserts values is NonEmptyArray<T> {
+  assert(values.length > 0, message);
+}
+
 const NANOSECONDS_PER_SECOND = 1e9;
 
 const BENCHMARK_SCRIPT = 'scripts/benchmark.ts';
@@ -47,10 +57,16 @@ function runBenchmark(scriptPath: string, durationMilliseconds: number): Benchma
   }
 }
 
-function median(values: number[]): number {
+function median(values: NonEmptyArray<number>): number;
+function median(values: readonly number[]): number | undefined;
+function median(values: readonly number[]): number | undefined {
+  if (values.length === 0) {
+    return undefined;
+  }
+
   const sorted = values.toSorted((left, right) => left - right);
 
-  return sorted[Math.floor((sorted.length - 1) / 2)] ?? Number.NaN;
+  return sorted[Math.floor((sorted.length - 1) / 2)];
 }
 
 function operationsPerSecond(measurement: Measurement): number {
@@ -66,9 +82,11 @@ function formatRate(perSecond: number): string {
  * the runner moved more than the code did, and calling that a regression would only cry wolf.
  */
 function formatChange(samples: Samples): string {
-  if (samples.base.length === 0) {
+  if (!isNonEmpty(samples.base)) {
     return 'no base measurement';
   }
+
+  assertNonEmpty(samples.head, 'formatChange() requires at least one head measurement');
 
   const overlapping =
     Math.max(Math.min(...samples.base), Math.min(...samples.head)) <=
@@ -86,7 +104,9 @@ function formatChange(samples: Samples): string {
 function buildReport(order: string[], samples: Map<string, Samples>, passes: number, duration: number): string {
   const rows = order.map(name => {
     const caseSamples = samples.get(name) ?? { base: [], head: [] };
-    const base = caseSamples.base.length === 0 ? '—' : formatRate(median(caseSamples.base));
+    const base = isNonEmpty(caseSamples.base) ? formatRate(median(caseSamples.base)) : '—';
+
+    assertNonEmpty(caseSamples.head, 'buildReport() requires at least one head measurement');
 
     return `| ${name} | ${base} | ${formatRate(median(caseSamples.head))} | ${formatChange(caseSamples)} |`;
   });
