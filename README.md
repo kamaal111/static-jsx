@@ -1,4 +1,4 @@
-# @kamaalio/static-jsx
+# static-jsx
 
 Parse static JSX into a plain, JSON-compatible JavaScript object, and print that object back to JSX.
 
