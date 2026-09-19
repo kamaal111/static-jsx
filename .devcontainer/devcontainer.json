@@ -1,0 +1,31 @@
+{
+  "name": "${localWorkspaceFolderBasename}",
+  "dockerComposeFile": ["docker-compose.code.yml"],
+  "service": "code",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/initialize.sh",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "zed": {
+      "extensions": ["oxc"]
+    },
+    "vscode": {
+      "extensions": [
+        "oxc.oxc-vscode",
+        "streetsidesoftware.code-spell-checker",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens",
+        "aaron-bond.better-comments",
+        "ryanluker.vscode-coverage-gutters"
+      ]
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/node:2": {},
+    "ghcr.io/guiyomh/features/just:0": {}
+  }
+}
