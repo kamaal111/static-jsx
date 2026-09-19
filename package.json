@@ -62,7 +62,7 @@
     "packageManager": {
       "name": "pnpm",
       "version": "^12.4.1",
-      "onFail": "download"
+      "onFail": "error"
     }
   }
 }
