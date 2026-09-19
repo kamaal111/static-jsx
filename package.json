@@ -1,0 +1,68 @@
+{
+  "name": "@kamaalio/static-jsx",
+  "version": "0.0.1",
+  "description": "Parse static JSX into JSON-compatible JavaScript objects, and print it back.",
+  "keywords": [
+    "json",
+    "jsx",
+    "parser",
+    "printer",
+    "static"
+  ],
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kamaal111/static-jsx"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "bench": "node scripts/benchmark.ts",
+    "compile": "tsc -p tsconfig.build.json",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "prepare": "husky",
+    "release": "sh scripts/publish.sh",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@kamaal111/kamaal-quality-config": "^0.0.3",
+    "@types/node": "^26.6.1",
+    "@vitest/coverage-v8": "^5.0.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts}": "pnpm run lint",
+    "*": "oxfmt --no-error-on-unmatched-pattern"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.4.1",
+      "onFail": "download"
+    }
+  }
+}
