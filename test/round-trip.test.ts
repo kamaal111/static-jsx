@@ -17,17 +17,26 @@ const SOURCES = {
   'an attribute value holding a line break': '<a title="one&#10;two" />',
   'text only': '<p>hello</p>',
   'text with spaces at both ends': '<p> spaced </p>',
-  'text wrapped over several lines': '<p>\n  one\n  two\n</p>',
+  'text wrapped over several lines': `<p>
+  one
+  two
+</p>`,
   'text around an element': '<p>before <b>bold</b> after</p>',
   'text holding markup characters': '<p>a &amp; b &lt; c &#123;d&#125;</p>',
   'text holding a line break': '<p>one&#10;two</p>',
   'expression children': '<a>{1}{"two"}{[3]}</a>',
   'an expression holding a brace inside a string': '<a>{"}"}</a>',
   'a text child next to an expression child': '<a>{1} and {2}</a>',
-  'a deep tree with mixed children':
-    '<page title="Docs">\n  <h1>Hello <em>world</em></h1>\n  <ul>\n    <li>{1}</li>\n    <li>{2}</li>\n  </ul>\n</page>',
-  'an element with text and a nested element split over several lines':
-    '<label>\n  Hello <strong>world</strong>\n</label>',
+  'a deep tree with mixed children': `<page title="Docs">
+  <h1>Hello <em>world</em></h1>
+  <ul>
+    <li>{1}</li>
+    <li>{2}</li>
+  </ul>
+</page>`,
+  'an element with text and a nested element split over several lines': `<label>
+  Hello <strong>world</strong>
+</label>`,
 };
 
 describe.each(Object.entries(SOURCES))('round-tripping %s', (_label, source) => {

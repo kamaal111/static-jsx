@@ -92,7 +92,15 @@ describe('parse', () => {
     });
 
     it('keeps a line break inside a quoted value, which is content rather than layout', () => {
-      expect(parse('<a title="one\ntwo" />')).toEqual(element('a', { title: 'one\ntwo' }));
+      expect(
+        parse(`<a title="one
+two" />`),
+      ).toEqual(
+        element('a', {
+          title: `one
+two`,
+        }),
+      );
     });
 
     it('stores an attribute named __proto__ as an ordinary own property', () => {
@@ -114,7 +122,12 @@ describe('parse', () => {
     });
 
     it('drops the indentation that only lays out the children', () => {
-      expect(parse('<row>\n  <a />\n  <b />\n</row>')).toEqual(element('row', {}, [element('a'), element('b')]));
+      expect(
+        parse(`<row>
+  <a />
+  <b />
+</row>`),
+      ).toEqual(element('row', {}, [element('a'), element('b')]));
     });
 
     it('keeps the space between text and the element that follows it', () => {
@@ -122,7 +135,12 @@ describe('parse', () => {
     });
 
     it('joins a sentence wrapped over several lines with single spaces', () => {
-      expect(parse('<p>\n  one\n  two\n</p>')).toEqual(element('p', {}, [text('one two')]));
+      expect(
+        parse(`<p>
+  one
+  two
+</p>`),
+      ).toEqual(element('p', {}, [text('one two')]));
     });
 
     it('treats a carriage return as a line break', () => {
@@ -138,9 +156,11 @@ describe('parse', () => {
     });
 
     it('keeps a nested element and drops only the layout around it', () => {
-      expect(parse('<label>\n  Hello <strong>world</strong>\n</label>')).toEqual(
-        element('label', {}, [text('Hello '), element('strong', {}, [text('world')])]),
-      );
+      expect(
+        parse(`<label>
+  Hello <strong>world</strong>
+</label>`),
+      ).toEqual(element('label', {}, [text('Hello '), element('strong', {}, [text('world')])]));
     });
   });
 
