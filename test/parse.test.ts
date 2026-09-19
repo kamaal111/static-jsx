@@ -136,6 +136,12 @@ describe('parse', () => {
     it('reads a greater-than sign as ordinary text, as JSX does', () => {
       expect(parse('<p>a > b</p>')).toEqual(element('p', {}, [text('a > b')]));
     });
+
+    it('keeps a nested element and drops only the layout around it', () => {
+      expect(parse('<label>\n  Hello <strong>world</strong>\n</label>')).toEqual(
+        element('label', {}, [text('Hello '), element('strong', {}, [text('world')])]),
+      );
+    });
   });
 
   describe('expressions', () => {

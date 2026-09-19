@@ -26,6 +26,8 @@ const SOURCES = {
   'a text child next to an expression child': '<a>{1} and {2}</a>',
   'a deep tree with mixed children':
     '<page title="Docs">\n  <h1>Hello <em>world</em></h1>\n  <ul>\n    <li>{1}</li>\n    <li>{2}</li>\n  </ul>\n</page>',
+  'an element with text and a nested element split over several lines':
+    '<label>\n  Hello <strong>world</strong>\n</label>',
 };
 
 describe.each(Object.entries(SOURCES))('round-tripping %s', (_label, source) => {
