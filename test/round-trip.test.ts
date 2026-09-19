@@ -1,10 +1,6 @@
 import { parse } from '../src/parser.ts';
 import { stringify } from '../src/stringify.ts';
 
-/**
- * One source per shape that the round-trip could plausibly break on. Each one is run against the
- * three guarantees below, so a regression names both the guarantee and the shape that broke it.
- */
 const SOURCES = {
   'a self-closing element': '<card />',
   'nested elements': '<a><b><c /></b></a>',
@@ -37,6 +33,12 @@ const SOURCES = {
   'an element with text and a nested element split over several lines': `<label>
   Hello <strong>world</strong>
 </label>`,
+  'an unpaired surrogate in text': '<p>&#55296;</p>',
+  'an unpaired surrogate in an attribute': '<a t="&#xD800;" />',
+  'an emoji, which is a surrogate pair': '<p>hi \u{1f600}</p>',
+  'a negative number': '<a n={-1.5} />',
+  'the largest number a double can hold': '<a n={1.7976931348623157e308} />',
+  'the smallest number a double can hold': '<a n={5e-324} />',
 };
 
 describe.each(Object.entries(SOURCES))('round-tripping %s', (_label, source) => {

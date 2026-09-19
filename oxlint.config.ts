@@ -3,31 +3,19 @@ import { defineConfig } from 'oxlint';
 
 export default defineConfig({
   extends: [kamaalQualityConfig],
-  plugins: ['typescript', 'unicorn', 'oxc'],
   options: {
-    typeAware: true,
-  },
-  categories: {
-    correctness: 'error',
+    reportUnusedDisableDirectives: 'error',
   },
   rules: {
-    curly: 'error',
-    'typescript/no-deprecated': 'error',
-    'typescript/consistent-type-imports': 'error',
-    'typescript/no-non-null-assertion': 'error',
-    'typescript/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
-    'oxc/no-accumulating-spread': 'error',
-    'import-js/order': [
+    'no-restricted-globals': [
       'error',
       {
-        groups: ['builtin', 'external', ['internal', 'parent', 'sibling', 'index']],
-        'newlines-between': 'always',
-        alphabetize: { order: 'asc', caseInsensitive: true },
+        name: 'Reflect',
+        message:
+          'Reflect is a way to write past a readonly type without an `as` cast. Give the value a real mutable type instead.',
       },
     ],
-  },
-  env: {
-    builtin: true,
+    'unicorn/no-abusive-eslint-disable': 'error',
   },
   ignorePatterns: ['dist/**/*'],
 });

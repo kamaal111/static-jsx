@@ -27,15 +27,22 @@ stringify(tree); // '<card title="Hello" count={3} open>Some text</card>'
 Parses a document holding exactly one root element or fragment. Whitespace around the root is
 ignored. Throws a `JSXSyntaxError` for anything else.
 
-### `stringify(node: JSXNode, options?: StringifyOptions): string`
+### `stringify(node: JSXRootNode, options?: StringifyOptions): string`
 
-Prints a node back to JSX. `options.indent` is the string one level of nesting is indented with, two
-spaces by default.
+Prints an element or a fragment back to JSX — the same two shapes `parse` returns, so whatever comes
+out can always be read back in. `options.indent` is the string one level of nesting is indented with,
+two spaces by default, and may hold only spaces, tabs and line breaks.
+
+Throws a `JSXStringifyError` rather than print something that would not read back. That can only
+happen for a tree assembled by hand: a value JSON cannot write (`Infinity`, `-Infinity`, `NaN`), a
+name that is not a name, an empty text node or two text nodes in a row, or an indent holding anything
+else. See [Round-tripping](#round-tripping).
 
 ### Errors
 
-`JSXSyntaxError` extends `StaticJSXError`, so every error this package throws can be caught as one
-group. A syntax error carries `offset`, `line`, `column` and a ready-to-print `frame`:
+`JSXSyntaxError` and `JSXStringifyError` both extend `StaticJSXError`, so every error this package
+throws can be caught as one group. A syntax error carries `offset`, `line`, `column` and a
+ready-to-print `frame`:
 
 ```
 Expected a quoted string or a `{…}` JSON value after `=` (2:10)
@@ -92,8 +99,18 @@ attribute named `__proto__` is stored as an ordinary own property.
 
 Only `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;` and numeric references such as `&#38;` or `&#x26;`
 are decoded. Every other `&name;` is left exactly as written, so nothing is lost in either direction.
+A numeric reference may name a surrogate code unit, which is how the printer writes an unpaired one.
 
 A `>` inside text is ordinary text, as it is in JSX.
+
+Every value in the tree is one that survives a JSON round trip, which the parser enforces rather than
+discovers later. A number too large for a double — `{1e400}`, or 309 digits with no exponent at all —
+is a syntax error, because `JSON.stringify` writes it back as `null` and a number would silently
+become something else. `-0` is normalized to `0` for the same reason: JSON writes it as `0`. A number
+that is merely rounded to the nearest double is kept, because the rounded value is what writes back.
+
+Duplicate keys inside a `{…}` JSON value are resolved by `JSON.parse`, so the last one wins. This is
+unlike a duplicate attribute, which is an error.
 
 ## Whitespace
 
@@ -119,24 +136,29 @@ stringify(parse(printed)); // exactly equals printed
 ```
 
 The first pass through `stringify` normalizes formatting; every pass after that is a fixed point.
-`JSON.parse(JSON.stringify(tree))` is likewise equal to `tree`.
+`JSON.parse(JSON.stringify(tree))` is likewise equal to `tree`. The printed document is always
+well-formed UTF-16, so writing it to a file or sending it over the wire cannot change it: an unpaired
+surrogate is written as a numeric reference, while a surrogate pair stays literal so astral characters
+like emoji remain readable.
 
-## Performance
+Every tree `parse` returns satisfies all three. A tree assembled by hand has to be one `parse` could
+have produced, which means:
 
-A single-pass scanner over the source string, driven by character codes, with no regular expressions
-in the hot path and no tokenizer array in between. Text and attribute runs become one `slice`, and
-the passes that cost something — whitespace normalization, entity decoding — run only when the run
-actually holds a line break, a tab or an ampersand. Both `parse` and `stringify` use an explicit
-stack rather than recursion, so nesting cannot exhaust the call stack.
+- every value is one a JSON round trip preserves, so no `Infinity`, `-Infinity`, `NaN` or `-0`;
+- every element and attribute name is a name, per the rules above;
+- no text node is empty, since printing one leaves nothing behind to read;
+- no two text nodes are adjacent, since printing them leaves nothing to tell them apart and they
+  come back as one;
+- the indent holds only spaces, tabs and line breaks.
 
-`just bench` on Node 26, Apple silicon:
+`stringify` throws a `JSXStringifyError` for each of those rather than print something that would
+read back as a different tree. The one exception is `-0`, which it writes as `0` just as
+`JSON.stringify` does.
 
-```
-parse  small element         2,785,889 ops/s     135.5 MB/s
-parse  2000 list items           1,118 ops/s     105.2 MB/s
-parse  1000 levels deep         13,967 ops/s      93.3 MB/s
-print  2000 list items           1,270 ops/s     119.6 MB/s
-```
+Nesting has no ceiling. `parse` and `stringify` walk the tree, and the values inside it, with
+explicit stacks, and Node 26 walks JSON iteratively as well, so all three guarantees hold however deep
+a document goes. A value that refers to itself is the one thing `JSON.stringify` will not write, and
+that is reported as a `JSXStringifyError` rather than left to escape as a `TypeError`.
 
 ## Development
 

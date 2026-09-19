@@ -1,6 +1,6 @@
 import { expectTypeOf } from 'vitest';
 
-import { parse, stringify, type JSXNode, type JSXRootNode, type StringifyOptions } from '../src/index.ts';
+import { parse, stringify, type JSXRootNode, type StringifyOptions } from '../src/index.ts';
 
 describe('parse', () => {
   it('returns an element or a fragment, never a text or expression node', () => {
@@ -9,8 +9,8 @@ describe('parse', () => {
 });
 
 describe('stringify', () => {
-  it('accepts any node, not only one that can be a root', () => {
-    expectTypeOf(stringify).parameter(0).toEqualTypeOf<JSXNode>();
+  it('accepts only a node that can be a root, so its output is always something parse can read', () => {
+    expectTypeOf(stringify).parameter(0).toEqualTypeOf<JSXRootNode>();
   });
 
   it('takes its options as an optional second argument', () => {

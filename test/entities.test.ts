@@ -63,8 +63,8 @@ describe('decodeEntities', () => {
     expect(decodeEntities('&#1114112;')).toBe('&#1114112;');
   });
 
-  it('leaves a lone surrogate alone, because it cannot stand on its own in a string', () => {
-    expect(decodeEntities('&#xD800;')).toBe('&#xD800;');
+  it('decodes a surrogate reference, which is how an unpaired surrogate is written back', () => {
+    expect(decodeEntities('&#xD800;')).toBe('\ud800');
   });
 });
 

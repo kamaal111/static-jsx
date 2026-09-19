@@ -1,7 +1,6 @@
 import { JSXSyntaxError, StaticJSXError } from '../src/errors.ts';
 import { parse } from '../src/parser.ts';
 
-/** Parses a source that must fail, and hands the test the error it failed with. */
 function syntaxErrorFrom(source: string): JSXSyntaxError {
   try {
     parse(source);
