@@ -1,0 +1,46 @@
+name: Benchmark
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.ref }}-benchmark
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare with base
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git - Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Check out the base revision
+        run: |
+          git worktree add ../base "${{ github.event.pull_request.base.sha }}"
+          mkdir -p ../base/scripts
+          cp scripts/benchmark.ts ../base/scripts/benchmark.ts
+
+      - name: Benchmark both revisions
+        continue-on-error: true
+        run: node scripts/benchmark-compare.ts --base ../base --out benchmark-report.md
+
+      - name: Comment on the pull request
+        if: always()
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark
+          path: benchmark-report.md

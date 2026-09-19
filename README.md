@@ -157,6 +157,12 @@ just test    # tests with coverage
 just bench   # the benchmarks above
 ```
 
+Every pull request is benchmarked against the commit it targets. The `Benchmark` workflow runs both
+revisions on the same runner, three passes each and interleaved, and posts a table of the result as
+a comment. It never fails the build: a change that costs performance is a trade-off to weigh while
+reviewing, not something CI should decide on its own. A case whose two sample ranges overlap is
+shown as `—`, because at that point the runner moved more than the code did.
+
 ## License
 
 MIT
