@@ -12,17 +12,24 @@ describe('stringify', () => {
     });
 
     it('puts each child element on its own indented line', () => {
-      expect(stringify(element('row', {}, [element('a'), element('b')]))).toBe('<row>\n  <a />\n  <b />\n</row>');
+      expect(stringify(element('row', {}, [element('a'), element('b')]))).toBe(`<row>
+  <a />
+  <b />
+</row>`);
     });
 
     it('indents one level deeper per level of nesting', () => {
-      expect(stringify(element('a', {}, [element('b', {}, [element('c')])]))).toBe(
-        '<a>\n  <b>\n    <c />\n  </b>\n</a>',
-      );
+      expect(stringify(element('a', {}, [element('b', {}, [element('c')])]))).toBe(`<a>
+  <b>
+    <c />
+  </b>
+</a>`);
     });
 
     it('indents a fragment’s children like an element’s', () => {
-      expect(stringify(fragment([element('a')]))).toBe('<>\n  <a />\n</>');
+      expect(stringify(fragment([element('a')]))).toBe(`<>
+  <a />
+</>`);
     });
   });
 
@@ -90,11 +97,16 @@ describe('stringify', () => {
 
   describe('expressions', () => {
     it('prints an expression child as JSON in braces', () => {
-      expect(stringify(element('a', {}, [expression(42)]))).toBe('<a>\n  {42}\n</a>');
+      expect(stringify(element('a', {}, [expression(42)]))).toBe(`<a>
+  {42}
+</a>`);
     });
 
     it('puts each expression child on its own line, since none of them is text', () => {
-      expect(stringify(element('a', {}, [expression(1), expression('two')]))).toBe('<a>\n  {1}\n  {"two"}\n</a>');
+      expect(stringify(element('a', {}, [expression(1), expression('two')]))).toBe(`<a>
+  {1}
+  {"two"}
+</a>`);
     });
 
     it('prints an expression node on its own', () => {
@@ -104,15 +116,21 @@ describe('stringify', () => {
 
   describe('indent option', () => {
     it('indents with two spaces by default', () => {
-      expect(stringify(element('a', {}, [element('b')]))).toBe('<a>\n  <b />\n</a>');
+      expect(stringify(element('a', {}, [element('b')]))).toBe(`<a>
+  <b />
+</a>`);
     });
 
     it('indents with the given string', () => {
-      expect(stringify(element('a', {}, [element('b')]), { indent: '    ' })).toBe('<a>\n    <b />\n</a>');
+      expect(stringify(element('a', {}, [element('b')]), { indent: '    ' })).toBe(`<a>
+    <b />
+</a>`);
     });
 
     it('indents with a tab when asked to', () => {
-      expect(stringify(element('a', {}, [element('b')]), { indent: '\t' })).toBe('<a>\n\t<b />\n</a>');
+      expect(stringify(element('a', {}, [element('b')]), { indent: '\t' })).toBe(`<a>
+\t<b />
+</a>`);
     });
   });
 });

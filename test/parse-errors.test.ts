@@ -210,7 +210,9 @@ describe('parse', () => {
   });
 
   describe('reports where the problem is', () => {
-    const MULTI_LINE_SOURCE = '<page>\n  <a foo=bar />\n</page>';
+    const MULTI_LINE_SOURCE = `<page>
+  <a foo=bar />
+</page>`;
 
     it('counts lines separated by a line feed', () => {
       expect(syntaxErrorFrom(MULTI_LINE_SOURCE)).toMatchObject({ line: 2, column: 10, offset: 16 });
@@ -225,7 +227,8 @@ describe('parse', () => {
     });
 
     it('shows the offending line with a caret under the problem', () => {
-      expect(syntaxErrorFrom(MULTI_LINE_SOURCE).frame).toBe('2 |   <a foo=bar />\n  |          ^');
+      expect(syntaxErrorFrom(MULTI_LINE_SOURCE).frame).toBe(`2 |   <a foo=bar />
+  |          ^`);
     });
 
     it('includes the line, the column and the frame in the message', () => {

@@ -82,7 +82,10 @@ describe('escapeText', () => {
   });
 
   it('escapes a line break, which whitespace normalization would otherwise swallow', () => {
-    expect(escapeText('one\ntwo')).toBe('one&#10;two');
+    expect(
+      escapeText(`one
+two`),
+    ).toBe('one&#10;two');
   });
 
   it('escapes a carriage return', () => {
@@ -98,7 +101,8 @@ describe('escapeText', () => {
   });
 
   it('is undone exactly by decodeEntities', () => {
-    const value = 'a & b < c > d {e} f\ng';
+    const value = `a & b < c > d {e} f
+g`;
 
     expect(decodeEntities(escapeText(value))).toBe(value);
   });
@@ -118,7 +122,10 @@ describe('escapeAttribute', () => {
   });
 
   it('escapes a line break so the value stays on one line', () => {
-    expect(escapeAttribute('one\ntwo')).toBe('one&#10;two');
+    expect(
+      escapeAttribute(`one
+two`),
+    ).toBe('one&#10;two');
   });
 
   it('leaves single quotes and braces alone, because they are harmless inside double quotes', () => {
