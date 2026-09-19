@@ -1,5 +1,12 @@
 import { decodeEntities } from './entities.ts';
 import { JSXSyntaxError } from './errors.ts';
+import {
+  isJsonContainer,
+  isUnwritableNumber,
+  type MutableJsonContainer,
+  type MutableJsonValue,
+} from './json-values.ts';
+import { isNamePart, isNameStart } from './names.ts';
 import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
 import { normalizeText } from './whitespace.ts';
 
@@ -13,15 +20,11 @@ const SPACE = 0x20;
 
 const DOUBLE_QUOTE = 0x22;
 
-const DOLLAR_SIGN = 0x24;
-
 const AMPERSAND = 0x26;
 
 const SINGLE_QUOTE = 0x27;
 
 const HYPHEN = 0x2d;
-
-const PERIOD = 0x2e;
 
 const SLASH = 0x2f;
 
@@ -29,31 +32,30 @@ const DIGIT_ZERO = 0x30;
 
 const DIGIT_NINE = 0x39;
 
-const COLON = 0x3a;
-
 const LESS_THAN = 0x3c;
 
 const EQUALS_SIGN = 0x3d;
 
 const GREATER_THAN = 0x3e;
 
-const UPPERCASE_A = 0x41;
-
-const UPPERCASE_Z = 0x5a;
+const UPPERCASE_E = 0x45;
 
 const BACKSLASH = 0x5c;
 
-const UNDERSCORE = 0x5f;
-
-const LOWERCASE_A = 0x61;
-
-const LOWERCASE_Z = 0x7a;
+const LOWERCASE_E = 0x65;
 
 const LEFT_BRACE = 0x7b;
 
 const RIGHT_BRACE = 0x7d;
 
 const PROTOTYPE_KEY = '__proto__';
+
+/** Digits enough to overflow a double on their own, without an exponent: `1e309` is already `Infinity`. */
+const OVERFLOW_DIGITS = 309;
+
+const UNWRITABLE_NUMBER_REASON = 'Number is too large to be written back, so it would not survive a round trip';
+
+const TAG_KINDS = { OPEN: 'open', CLOSE: 'close' } as const;
 
 /** A cursor over the source string. The only thing that ever changes while parsing. */
 interface Scanner {
@@ -67,9 +69,18 @@ interface OpenNode {
   readonly openedAt: number;
 }
 
-type Tag =
-  | { readonly kind: 'open'; readonly node: JSXElement | JSXFragment; readonly selfClosing: boolean }
-  | { readonly kind: 'close'; readonly name: string | undefined };
+interface OpenTag {
+  readonly kind: typeof TAG_KINDS.OPEN;
+  readonly node: JSXElement | JSXFragment;
+  readonly selfClosing: boolean;
+}
+
+interface CloseTag {
+  readonly kind: typeof TAG_KINDS.CLOSE;
+  readonly name: string | undefined;
+}
+
+type Tag = OpenTag | CloseTag;
 
 /**
  * Parses a static JSX document into a JSON-compatible tree.
@@ -105,7 +116,7 @@ function parseTree(scanner: Scanner): JSXRootNode {
 
   const first = readTag(scanner);
 
-  if (first.kind === 'close') {
+  if (first.kind === TAG_KINDS.CLOSE) {
     throw new JSXSyntaxError('Unexpected closing tag', source, rootStart);
   }
 
@@ -132,7 +143,7 @@ function parseTree(scanner: Scanner): JSXRootNode {
     const tagStart = scanner.index;
     const tag = readTag(scanner);
 
-    if (tag.kind === 'open') {
+    if (tag.kind === TAG_KINDS.OPEN) {
       if (tag.selfClosing) {
         current.node.children.push(tag.node);
       } else {
@@ -163,6 +174,14 @@ function parseTree(scanner: Scanner): JSXRootNode {
   throw new JSXSyntaxError(`Expected a closing tag for ${openingTagLabel(current.node)}`, source, current.openedAt);
 }
 
+function makeCloseTag(opts: Omit<CloseTag, 'kind'>): CloseTag {
+  return { kind: TAG_KINDS.CLOSE, name: opts.name };
+}
+
+function makeOpenTag(opts: Omit<OpenTag, 'kind'>): OpenTag {
+  return { kind: TAG_KINDS.OPEN, node: opts.node, selfClosing: opts.selfClosing };
+}
+
 /** Reads one complete tag, starting at its `<`. */
 function readTag(scanner: Scanner): Tag {
   const tagStart = scanner.index;
@@ -174,7 +193,7 @@ function readTag(scanner: Scanner): Tag {
     skipWhitespace(scanner);
     expect(scanner, GREATER_THAN, 'Expected `>` to end the closing tag');
 
-    return { kind: 'close', name };
+    return makeCloseTag({ name });
   }
 
   const name = readTagName(scanner);
@@ -182,7 +201,7 @@ function readTag(scanner: Scanner): Tag {
   if (name === undefined) {
     scanner.index += 1;
 
-    return { kind: 'open', node: { type: 'fragment', children: [] }, selfClosing: false };
+    return makeOpenTag({ node: { type: 'fragment', children: [] }, selfClosing: false });
   }
 
   const attributes = readAttributes(scanner, tagStart);
@@ -194,7 +213,7 @@ function readTag(scanner: Scanner): Tag {
 
   expect(scanner, GREATER_THAN, 'Expected `>` to end the opening tag');
 
-  return { kind: 'open', node: { type: 'element', name, attributes, children: [] }, selfClosing };
+  return makeOpenTag({ node: { type: 'element', name, attributes, children: [] }, selfClosing });
 }
 
 /** Returns `undefined` for a fragment's empty tag, and rejects anything else that is not a name. */
@@ -267,6 +286,9 @@ function readAttributeValue(scanner: Scanner): JsonValue {
 /**
  * Finds the `}` that closes the container — skipping over braces inside JSON strings — and hands
  * the single slice between the braces to `JSON.parse`, which rejects everything that is not JSON.
+ *
+ * The same walk notes whether the slice could hold a number `JSON.stringify` would not write back,
+ * so that {@link normalizeJsonValue} only ever visits the values that could actually need it.
  */
 function readExpression(scanner: Scanner): JsonValue {
   const { source } = scanner;
@@ -274,6 +296,8 @@ function readExpression(scanner: Scanner): JsonValue {
   let index = start + 1;
   let depth = 1;
   let inString = false;
+  let digitRun = 0;
+  let mayHoldUnwritableNumber = false;
 
   while (index < source.length) {
     const code = source.charCodeAt(index);
@@ -292,6 +316,20 @@ function readExpression(scanner: Scanner): JsonValue {
       continue;
     }
 
+    if (code >= DIGIT_ZERO && code <= DIGIT_NINE) {
+      digitRun += 1;
+
+      if (digitRun >= OVERFLOW_DIGITS) {
+        mayHoldUnwritableNumber = true;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    const afterDigit = digitRun > 0;
+    digitRun = 0;
+
     if (code === DOUBLE_QUOTE) {
       inString = true;
     } else if (code === LEFT_BRACE) {
@@ -302,8 +340,15 @@ function readExpression(scanner: Scanner): JsonValue {
       if (depth === 0) {
         scanner.index = index + 1;
 
-        return parseJsonValue(source.slice(start + 1, index), source, start);
+        return parseJsonValue(source.slice(start + 1, index), source, start, mayHoldUnwritableNumber);
       }
+    } else if (afterDigit && (code === LOWERCASE_E || code === UPPERCASE_E)) {
+      // an exponent is the short way to overflow to Infinity, and JSON only ever writes one
+      // straight after a digit — so the `e` in `true` and `false` is not one
+      mayHoldUnwritableNumber = true;
+    } else if (code === HYPHEN && source.charCodeAt(index + 1) === DIGIT_ZERO) {
+      // `-0` is the one finite number JSON cannot write back
+      mayHoldUnwritableNumber = true;
     }
 
     index += 1;
@@ -312,14 +357,63 @@ function readExpression(scanner: Scanner): JsonValue {
   throw new JSXSyntaxError('Unterminated expression', source, start);
 }
 
-function parseJsonValue(text: string, source: string, offset: number): JsonValue {
-  try {
-    const value: JsonValue = JSON.parse(text);
+function parseJsonValue(text: string, source: string, offset: number, validate: boolean): JsonValue {
+  let value: MutableJsonValue;
 
-    return value;
+  try {
+    value = JSON.parse(text);
   } catch {
     throw new JSXSyntaxError('Expected a single JSON value between `{` and `}`', source, offset);
   }
+
+  return validate ? normalizeJsonValue(value, source, offset) : value;
+}
+
+/**
+ * Keeps the tree's promise that every value it holds survives a JSON round trip. `JSON.stringify`
+ * writes `Infinity` and `NaN` as `null`, which would change the value's very type, so those are
+ * rejected; it writes `-0` as `0`, so a negative zero is normalized here rather than changing
+ * silently on the way out.
+ *
+ * Nested values are walked with an explicit stack rather than recursion, so that a deeply nested
+ * value cannot exhaust the call stack.
+ */
+function normalizeJsonValue(value: MutableJsonValue, source: string, offset: number): JsonValue {
+  if (!isJsonContainer(value)) {
+    if (isUnwritableNumber(value)) {
+      throw new JSXSyntaxError(UNWRITABLE_NUMBER_REASON, source, offset);
+    }
+
+    return Object.is(value, -0) ? 0 : value;
+  }
+
+  const containers: MutableJsonContainer[] = [value];
+
+  for (let container = containers.pop(); container !== undefined; container = containers.pop()) {
+    for (const [key, held] of Object.entries(container)) {
+      if (isJsonContainer(held)) {
+        containers.push(held);
+        continue;
+      }
+
+      if (isUnwritableNumber(held)) {
+        throw new JSXSyntaxError(UNWRITABLE_NUMBER_REASON, source, offset);
+      }
+
+      if (!Object.is(held, -0)) {
+        continue;
+      }
+
+      if (Array.isArray(container)) {
+        container[Number(key)] = 0;
+        continue;
+      }
+
+      container[key] = 0;
+    }
+  }
+
+  return value;
 }
 
 /** Reads a quoted attribute value. Backslashes are not escapes here; only entities are decoded. */
@@ -452,25 +546,6 @@ function peek(scanner: Scanner): number {
 
 function isWhitespace(code: number): boolean {
   return code === SPACE || code === TAB || code === LINE_FEED || code === CARRIAGE_RETURN;
-}
-
-function isNameStart(code: number): boolean {
-  return (
-    (code >= LOWERCASE_A && code <= LOWERCASE_Z) ||
-    (code >= UPPERCASE_A && code <= UPPERCASE_Z) ||
-    code === UNDERSCORE ||
-    code === DOLLAR_SIGN
-  );
-}
-
-function isNamePart(code: number): boolean {
-  return (
-    isNameStart(code) ||
-    (code >= DIGIT_ZERO && code <= DIGIT_NINE) ||
-    code === HYPHEN ||
-    code === PERIOD ||
-    code === COLON
-  );
 }
 
 function openingTagLabel(node: JSXElement | JSXFragment): string {

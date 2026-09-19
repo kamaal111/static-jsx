@@ -1,4 +1,4 @@
-export { JSXSyntaxError, StaticJSXError } from './errors.ts';
+export { JSXStringifyError, JSXSyntaxError, StaticJSXError } from './errors.ts';
 
 export { parse } from './parser.ts';
 

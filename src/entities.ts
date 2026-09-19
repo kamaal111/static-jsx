@@ -20,9 +20,13 @@ const UPPERCASE_X = 0x58;
 
 const MAX_CODE_POINT = 0x10ffff;
 
-const FIRST_SURROGATE = 0xd800;
+const FIRST_HIGH_SURROGATE = 0xd800;
 
-const LAST_SURROGATE = 0xdfff;
+const LAST_HIGH_SURROGATE = 0xdbff;
+
+const FIRST_LOW_SURROGATE = 0xdc00;
+
+const LAST_LOW_SURROGATE = 0xdfff;
 
 /**
  * Replaces the supported character references in `raw` with the characters they stand for.
@@ -90,7 +94,10 @@ function decodeReference(body: string): string | undefined {
   return String.fromCodePoint(codePoint);
 }
 
-/** Like `Number.parseInt`, but rejects anything that is not entirely digits of the given radix. */
+/**
+ * Like `Number.parseInt`, but rejects anything that is not entirely digits of the given radix.
+ * A surrogate code point is allowed: it is how {@link escapeText} writes back an unpaired one.
+ */
 function parseCodePoint(digits: string, radix: number): number | undefined {
   if (digits.length === 0) {
     return undefined;
@@ -110,10 +117,6 @@ function parseCodePoint(digits: string, radix: number): number | undefined {
     if (codePoint > MAX_CODE_POINT) {
       return undefined;
     }
-  }
-
-  if (codePoint >= FIRST_SURROGATE && codePoint <= LAST_SURROGATE) {
-    return undefined;
   }
 
   return codePoint;
@@ -171,7 +174,12 @@ function escapeWith(value: string, replacementOf: (code: number) => string | und
   let copiedUpTo = 0;
 
   for (let index = 0; index < value.length; index += 1) {
-    const replacement = replacementOf(value.charCodeAt(index));
+    const code = value.charCodeAt(index);
+    let replacement = replacementOf(code);
+
+    if (replacement === undefined && code >= FIRST_HIGH_SURROGATE && code <= LAST_LOW_SURROGATE) {
+      replacement = surrogateReplacement(value, index, code);
+    }
 
     if (replacement === undefined) {
       continue;
@@ -182,4 +190,27 @@ function escapeWith(value: string, replacementOf: (code: number) => string | und
   }
 
   return copiedUpTo === 0 ? value : escaped + value.slice(copiedUpTo);
+}
+
+/**
+ * A surrogate that is half of a pair is an ordinary character and stays literal, so astral
+ * characters like emoji are written as themselves. An unpaired one cannot: the output would not be
+ * well-formed UTF-16, and writing it to a UTF-8 file would replace it with U+FFFD and lose it. A
+ * numeric reference carries it instead.
+ */
+function surrogateReplacement(value: string, index: number, code: number): string | undefined {
+  const paired =
+    code <= LAST_HIGH_SURROGATE
+      ? isLowSurrogate(value.charCodeAt(index + 1))
+      : isHighSurrogate(value.charCodeAt(index - 1));
+
+  return paired ? undefined : `&#${code};`;
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= FIRST_HIGH_SURROGATE && code <= LAST_HIGH_SURROGATE;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= FIRST_LOW_SURROGATE && code <= LAST_LOW_SURROGATE;
 }

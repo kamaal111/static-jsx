@@ -6,6 +6,13 @@ export class StaticJSXError extends Error {
   }
 }
 
+/**
+ * Thrown when a tree cannot be written as JSX that would parse back to an equal tree, either
+ * because it holds a value JSON cannot represent or because a name, text node or option would not
+ * survive the trip.
+ */
+export class JSXStringifyError extends StaticJSXError {}
+
 /** Thrown when a source string is not valid static JSX. */
 export class JSXSyntaxError extends StaticJSXError {
   /** Zero-based index into the source string where the problem was found. */

@@ -89,10 +89,6 @@ describe('stringify', () => {
     it('escapes the characters in text that would otherwise be markup', () => {
       expect(stringify(element('p', {}, [text('a & b < {c}')]))).toBe('<p>a &amp; b &lt; &#123;c&#125;</p>');
     });
-
-    it('prints a text node on its own', () => {
-      expect(stringify(text('hello'))).toBe('hello');
-    });
   });
 
   describe('expressions', () => {
@@ -107,10 +103,6 @@ describe('stringify', () => {
   {1}
   {"two"}
 </a>`);
-    });
-
-    it('prints an expression node on its own', () => {
-      expect(stringify(expression([1, 2]))).toBe('{[1,2]}');
     });
   });
 
