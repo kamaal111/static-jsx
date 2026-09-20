@@ -5,13 +5,15 @@
       "label": "just: quality",
       "type": "shell",
       "command": "just",
-      "args": ["quality"]
+      "args": ["quality"],
+      "problemMatcher": []
     },
     {
       "label": "just: ready",
       "type": "shell",
       "command": "just",
       "args": ["ready"],
+      "problemMatcher": [],
       "group": {
         "kind": "build",
         "isDefault": true
@@ -21,37 +23,43 @@
       "label": "just: bench",
       "type": "shell",
       "command": "just",
-      "args": ["bench"]
+      "args": ["bench"],
+      "problemMatcher": []
     },
     {
       "label": "just: format",
       "type": "shell",
       "command": "just",
-      "args": ["format"]
+      "args": ["format"],
+      "problemMatcher": []
     },
     {
       "label": "just: format:check",
       "type": "shell",
       "command": "just",
-      "args": ["format-check"]
+      "args": ["format-check"],
+      "problemMatcher": []
     },
     {
       "label": "just: lint",
       "type": "shell",
       "command": "just",
-      "args": ["lint"]
+      "args": ["lint"],
+      "problemMatcher": []
     },
     {
       "label": "just: type-check",
       "type": "shell",
       "command": "just",
-      "args": ["type-check"]
+      "args": ["type-check"],
+      "problemMatcher": []
     },
     {
       "label": "just: test",
       "type": "shell",
       "command": "just",
-      "args": ["test"]
+      "args": ["test"],
+      "problemMatcher": []
     }
   ]
 }
