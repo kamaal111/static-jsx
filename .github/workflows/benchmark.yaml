@@ -49,6 +49,7 @@ jobs:
           git worktree add ../base "${{ github.event.pull_request.base.sha }}"
           mkdir -p ../base/scripts
           cp scripts/benchmark.ts ../base/scripts/benchmark.ts
+          ln -s "$GITHUB_WORKSPACE/node_modules" ../base/node_modules
 
       - name: Benchmark both revisions
         run: node scripts/benchmark-compare.ts --base ../base --out benchmark-report.md
