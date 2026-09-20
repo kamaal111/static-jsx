@@ -18,7 +18,8 @@
         "eamodio.gitlens",
         "aaron-bond.better-comments",
         "vitest.explorer",
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "github.vscode-github-actions"
       ]
     }
   },
