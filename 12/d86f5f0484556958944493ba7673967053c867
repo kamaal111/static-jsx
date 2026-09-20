@@ -1,0 +1,37 @@
+src/parser.ts
+  s_37b0a87ec7d2e5::t_0d8cdb605c01e7 9,93-98,118-121,123-126,130,143-146,148-169,175-184,439
+  s_37b0a87ec7d2e5::t_89dfa119dd6545 352,402,434-438
+  s_37b0a87ec7d2e5::t_b2ab5a33e2576e 142,147,170-174
+  s_37b0a87ec7d2e5::t_639b50a695f9f5 185,341,351,365-385,398-401,403-404,433
+  s_37b0a87ec7d2e5::t_a0f70a2bc4850c 186
+  s_37b0a87ec7d2e5::t_f218ecef7fdcf5 440
+README.md
+  s_37b0a87ec7d2e5::t_8b0c1b228f4094 50
+  s_37b0a87ec7d2e5::t_2aa9d0328d631c 30-46,59-62
+  s_37b0a87ec7d2e5::t_1c82bf5291384b 63
+test/parse-allowed-elements.test.ts
+  s_37b0a87ec7d2e5::t_2530c4de1a948d 4-8,23
+  s_37b0a87ec7d2e5::t_8fbed8330e9174 99-105
+  s_37b0a87ec7d2e5::t_8b0c1b228f4094 79-82
+  s_37b0a87ec7d2e5::t_920744c7e85189 1-3,9-22,24-78,83-98,106-108
+test/index.test-d.ts
+  s_37b0a87ec7d2e5::t_b2ab5a33e2576e 17,21
+  s_37b0a87ec7d2e5::t_2aa9d0328d631c 13-14,18-20,22
+  s_37b0a87ec7d2e5::t_4aae3db1d3f666 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "12d86f5f0484556958944493ba7673967053c867",
+  "prompts": {},
+  "sessions": {
+    "s_37b0a87ec7d2e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c040-b40f-7a81-aa02-837fdb6d8de8",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Kamaal Farah <kamaal.f1@gmail.com>"
+    }
+  }
+}
