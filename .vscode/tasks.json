@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "just: quality",
+      "type": "shell",
+      "command": "just",
+      "args": ["quality"]
+    },
+    {
+      "label": "just: ready",
+      "type": "shell",
+      "command": "just",
+      "args": ["ready"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "just: bench",
+      "type": "shell",
+      "command": "just",
+      "args": ["bench"]
+    },
+    {
+      "label": "just: format",
+      "type": "shell",
+      "command": "just",
+      "args": ["format"]
+    },
+    {
+      "label": "just: format:check",
+      "type": "shell",
+      "command": "just",
+      "args": ["format-check"]
+    },
+    {
+      "label": "just: lint",
+      "type": "shell",
+      "command": "just",
+      "args": ["lint"]
+    },
+    {
+      "label": "just: type-check",
+      "type": "shell",
+      "command": "just",
+      "args": ["type-check"]
+    },
+    {
+      "label": "just: test",
+      "type": "shell",
+      "command": "just",
+      "args": ["test"]
+    }
+  ]
+}
