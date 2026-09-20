@@ -10,6 +10,8 @@ const DEFAULT_INDENT = '  ';
 /** Anything but layout in the indent would be read back as text, so the indent is held to these. */
 const NON_LAYOUT = /[^ \t\r\n]/;
 
+const NOT_JSON_MESSAGE = 'A value that is not JSON cannot be written';
+
 const UNWRITABLE_NUMBER_MESSAGE =
   'A value holds Infinity, -Infinity, NaN or -0, which JSON writes as null or 0, so it would not read back';
 
@@ -186,20 +188,33 @@ function inspectChildren(children: readonly JSXNode[]): boolean {
   return hasText;
 }
 
+/**
+ * Read by key rather than by entry: `Object.entries` walks an attributes object considerably slower
+ * than `Object.keys` does, now that the object it is given has no prototype.
+ */
 function attributesText(attributes: JSXAttributes): string {
   let text = '';
 
-  Object.entries(attributes).forEach(([name, value]) => {
-    text += attributeText(name, value);
-  });
+  for (const name of Object.keys(attributes)) {
+    text += attributeText(name, attributes[name]);
+  }
 
   return text;
 }
 
-/** A bare name means `true`, a quoted value means a string, and everything else is JSON in braces. */
-function attributeText(name: string, value: JsonValue): string {
+/**
+ * A bare name means `true`, a quoted value means a string, and everything else is JSON in braces.
+ *
+ * The value is typed as possibly absent because a tree assembled by hand can hold an attribute that
+ * is `undefined`, which the types forbid but nothing at runtime prevents.
+ */
+function attributeText(name: string, value: JsonValue | undefined): string {
   if (!isAttributeName(name)) {
     throw new JSXStringifyError(`"${name}" cannot be written as an attribute name`);
+  }
+
+  if (value === undefined) {
+    throw new JSXStringifyError(NOT_JSON_MESSAGE);
   }
 
   if (value === true) {
@@ -235,7 +250,7 @@ function scalarJsonText(value: JsonValue): string {
   const text: string | undefined = JSON.stringify(value);
 
   if (text === undefined) {
-    throw new JSXStringifyError('A value that is not JSON cannot be written');
+    throw new JSXStringifyError(NOT_JSON_MESSAGE);
   }
 
   return text;

@@ -1,7 +1,10 @@
 import { parseArgs } from 'node:util';
 
+import type { JSXCursor } from '../src/cursor.ts';
 import { parse } from '../src/parser.ts';
+import { find, findAll } from '../src/search.ts';
 import { stringify } from '../src/stringify.ts';
+import { walk } from '../src/walk.ts';
 
 interface Benchmark {
   readonly name: string;
@@ -50,7 +53,29 @@ const BENCHMARKS: Benchmark[] = [
   { name: 'parse 2000 list items', bytes: LARGE.length, run: () => void parse(LARGE) },
   { name: 'parse a tree 1000 levels deep', bytes: DEEP.length, run: () => void parse(DEEP) },
   { name: 'print 2000 list items', bytes: PRINTED_LARGE.length, run: () => void stringify(LARGE_TREE) },
+  { name: 'walk 2000 list items', bytes: LARGE.length, run: () => walkAll() },
+  {
+    name: 'find a name that is never there',
+    bytes: LARGE.length,
+    run: () => void find(LARGE_TREE, isNamed('nothing')),
+  },
+  {
+    name: 'collect 2000 list items',
+    bytes: LARGE.length,
+    run: () => void Array.from(findAll(LARGE_TREE, isNamed('li'))),
+  },
 ];
+
+function isNamed(name: string): (cursor: JSXCursor) => boolean {
+  return cursor => cursor.node.type === 'element' && cursor.node.name === name;
+}
+
+/** The floor every query pays: one cursor per node, and nothing else. */
+function walkAll(): void {
+  for (const cursor of walk(LARGE_TREE)) {
+    void cursor.depth;
+  }
+}
 
 /** Runs one case for the given budget and reports how long a single run took. */
 function measure(benchmark: Benchmark, durationNanoseconds: bigint): Measurement {

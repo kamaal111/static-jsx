@@ -169,11 +169,18 @@ describe('a value JSON would not write back', () => {
     expect(stringify(element('a', {}, [expression('null')]))).toBe('<a>\n  {"null"}\n</a>');
   });
 
-  it('refuses a value that is not JSON at all', () => {
+  it('refuses an attribute value that is not JSON at all', () => {
     const attributes: JSXAttributes = {};
     Object.defineProperty(attributes, 'n', { value: undefined, enumerable: true });
 
     expect(() => stringify(element('a', attributes))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses an expression value that is not JSON at all', () => {
+    const node = expression(0);
+    Object.defineProperty(node, 'value', { value: undefined, enumerable: true });
+
+    expect(() => stringify(element('a', {}, [node]))).toThrow(JSXStringifyError);
   });
 });
 

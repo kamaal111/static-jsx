@@ -1,6 +1,16 @@
 import { expectTypeOf } from 'vitest';
 
-import { parse, stringify, type JSXRootNode, type ParseOptions, type StringifyOptions } from '../src/index.ts';
+import {
+  find,
+  type JSXCursor,
+  type JSXElement,
+  type JSXRootNode,
+  parse,
+  type ParseOptions,
+  stringify,
+  type StringifyOptions,
+  walk,
+} from '../src/index.ts';
 
 describe('parse', () => {
   it('returns an element or a fragment, never a text or expression node', () => {
@@ -33,5 +43,27 @@ describe('stringify', () => {
 
   it('returns a string', () => {
     expectTypeOf(stringify).returns.toEqualTypeOf<string>();
+  });
+});
+
+describe('walk', () => {
+  it('yields cursors', () => {
+    expectTypeOf(walk(parse('<a />'))).toEqualTypeOf<Generator<JSXCursor, void, undefined>>();
+  });
+});
+
+describe('a predicate written as a type guard for elements', () => {
+  it('narrows what find gives back to a cursor at an element', () => {
+    const isElement = (cursor: JSXCursor): cursor is JSXCursor<JSXElement> => cursor.node.type === 'element';
+
+    expectTypeOf(find(parse('<a />'), isElement)).toEqualTypeOf<JSXCursor<JSXElement> | undefined>();
+  });
+});
+
+describe('a plain boolean predicate', () => {
+  it('leaves what find gives back unnarrowed', () => {
+    const anyNode = (cursor: JSXCursor): boolean => cursor.depth >= 0;
+
+    expectTypeOf(find(parse('<a />'), anyNode)).toEqualTypeOf<JSXCursor | undefined>();
   });
 });

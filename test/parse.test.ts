@@ -142,10 +142,16 @@ two`,
       expect(Object.getOwnPropertyDescriptor(attributes, '__proto__')?.value).toBe('polluted');
     });
 
-    it('does not let an attribute named __proto__ replace the prototype', () => {
+    it('gives the attributes object no prototype, so an inherited name is never mistaken for an attribute', () => {
       const { attributes } = asElement(parse('<a __proto__="polluted" />'));
 
-      expect(Object.getPrototypeOf(attributes)).toBe(Object.prototype);
+      expect(Object.getPrototypeOf(attributes)).toBe(null);
+    });
+
+    it('answers `in` for an Object.prototype member with false unless the document wrote it', () => {
+      const { attributes } = asElement(parse('<a title="Hi" />'));
+
+      expect('toString' in attributes).toBe(false);
     });
   });
 

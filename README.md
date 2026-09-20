@@ -94,7 +94,8 @@ Expected a quoted string or a `{…}` JSON value after `=` (2:10)
   |          ^
 ```
 
-A `JSXLimitError` additionally carries `limit` (which `ParseOptions` field was exceeded),
+A `JSXLimitError` additionally carries `limit` (which `ParseOptions` field was exceeded, typed as the
+exported `JSXLimit`),
 `limitValue` (what it was set to) and `actualValue` (what the source held instead), so a caller can
 tell a limit violation apart from malformed input and react to it — e.g. reject the request as too
 large instead of reporting it as a bad document.
@@ -128,6 +129,213 @@ interface JSXExpression {
 ```
 
 `attributes` and `children` are always present, so the JSON shape never changes with the content.
+Two of those names are exported in their own right: `JSXAttributes` is the type of an `attributes`
+object, and `JsonValue` is any value a JSON round trip preserves — a string, number, boolean, `null`,
+or an array or object of those.
+
+The `attributes` object has **no prototype**, so a name only ever answers for itself. `Object.keys`,
+`Object.entries`, spread and `JSON.stringify` behave exactly as they would on an ordinary object, but
+nothing is inherited, so looking a name up can never find something `Object` put there:
+
+```ts
+const { attributes } = parse('<a title="Hi" />'); // element
+Object.getPrototypeOf(attributes); // null
+'toString' in attributes; // false
+```
+
+That matters as soon as an attribute name comes from a variable rather than from source you wrote,
+which is exactly what searching a document does.
+
+## Searching the tree
+
+`parse` gives back inert JSON: a node knows nothing about where it sits. Searching therefore hands you
+a **cursor** — a node together with the way down to it — rather than a bare node, so a result can be
+navigated upwards. Cursors are built by the traversal and thrown away with it; nothing is ever written
+to the tree.
+
+```ts
+interface JSXCursor<Node extends JSXNode = JSXNode> {
+  readonly node: Node;
+  readonly parent: JSXCursor | undefined;
+  readonly index: number;
+  readonly depth: number;
+}
+
+type JSXMatcher = (cursor: JSXCursor) => boolean;
+```
+
+| Field    | What it holds                                                   |
+| -------- | --------------------------------------------------------------- |
+| `node`   | the node this cursor is at                                      |
+| `parent` | the cursor for the node holding it, or `undefined` at the root  |
+| `index`  | this node's place among its parent's children; `-1` at the root |
+| `depth`  | how many nodes stand between it and the root; `0` at the root   |
+
+The type parameter is what lets a search narrow its result: `JSXCursor<JSXElement>` is a cursor known
+to be at an element, so `.node.name` and `.node.attributes` can be read without a check.
+
+```ts
+import { find, findAll, walk } from '@kamaalio/static-jsx';
+
+const tree = parse('<ul><li id="a">First</li><li id="b">Second</li></ul>');
+
+for (const cursor of walk(tree)) {
+  console.log(cursor.depth, cursor.node.type);
+}
+```
+
+A **matcher** is just a predicate over a cursor, which is all `JSXMatcher` says, so most of what you
+want to ask is a one-liner:
+
+```ts
+const isListItem = cursor => cursor.node.type === 'element' && cursor.node.name === 'li';
+
+find(tree, isListItem); // the first match, or undefined
+Array.from(findAll(tree, isListItem)); // every match
+```
+
+`walk` and `findAll` are lazy generators, and `find` stops at the first hit rather than walking the
+rest. All of them take either a whole document or a cursor, so searches compose: `find(found, …)`
+searches that subtree while the result's `parent` chain still reaches the document root.
+
+Write a matcher as a type guard and the result is typed as an element, with no cast:
+
+```ts
+const isListItem = (cursor: JSXCursor): cursor is JSXCursor<JSXElement> =>
+  cursor.node.type === 'element' && cursor.node.name === 'li';
+
+find(tree, isListItem)?.node.name; // string
+```
+
+| Export                | What it does                                                         |
+| --------------------- | -------------------------------------------------------------------- |
+| `walk(from)`          | every node from here down, in document order, lazily                 |
+| `find(from, m)`       | the first match, or `undefined`; stops walking at the hit            |
+| `findAll(from, m)`    | every match, in document order, lazily                               |
+| `closest(cursor, m)`  | the nearest cursor at or above this one that matches, like the DOM's |
+| `childrenOf(cursor)`  | a cursor per child, in order                                         |
+| `ancestorsOf(cursor)` | every cursor above this one, from the root down                      |
+| `isElementCursor(c)`  | narrows a cursor to one at an element                                |
+
+There is no text-extraction helper. What counts as a node's text is a decision only you can make —
+whether a `{…}` expression contributes its value or nothing at all — so write the few lines that suit
+your own documents:
+
+```ts
+let text = '';
+
+for (const cursor of walk(node)) {
+  if (cursor.node.type === 'text') {
+    text += cursor.node.value;
+  }
+}
+```
+
+### Asking about structure
+
+The four combinators turn a matcher into a matcher that asks about a node's surroundings. Each takes
+one matcher and returns one, so they compose with any predicate you write. Sharing one document and
+one helper:
+
+```ts
+import { findAll, withAncestor, withChild, withDescendant, withParent } from '@kamaalio/static-jsx';
+
+const named = name => cursor => cursor.node.type === 'element' && cursor.node.name === name;
+
+const doc = parse(`
+  <page>
+    <ul>
+      <li>One</li>
+      <><li>Two</li></>
+    </ul>
+    <section><h1>Intro</h1><p>Body</p></section>
+    <section><p>No heading</p></section>
+  </page>
+`);
+```
+
+**`withParent(m)`** — the node's parent matches. This is the CSS `A > B` combinator, written as
+"`B`, and its parent is `A`":
+
+```ts
+Array.from(findAll(doc, cursor => named('li')(cursor) && withParent(named('ul'))(cursor)));
+// both list items: One, Two
+```
+
+**`withAncestor(m)`** — some node above it matches, however far up. This is the CSS `A B`
+combinator:
+
+```ts
+Array.from(findAll(doc, cursor => named('p')(cursor) && withAncestor(named('section'))(cursor)));
+// both paragraphs: Body, No heading
+```
+
+**`withChild(m)`** — some node directly inside it matches. Useful for "only the ones that have a
+…":
+
+```ts
+Array.from(findAll(doc, cursor => named('section')(cursor) && withChild(named('h1'))(cursor)));
+// only the first section -- the second has no heading
+```
+
+**`withDescendant(m)`** — something somewhere inside it matches:
+
+```ts
+Array.from(findAll(doc, cursor => named('page')(cursor) && withDescendant(named('h1'))(cursor)));
+// the page, because a heading exists somewhere below it
+```
+
+| Export              | True when                                                       |
+| ------------------- | --------------------------------------------------------------- |
+| `withParent(m)`     | the node's effective parent matches — the `A > B` combinator    |
+| `withAncestor(m)`   | any ancestor matches, fragments included — the `A B` combinator |
+| `withChild(m)`      | any effective child matches                                     |
+| `withDescendant(m)` | any descendant matches, fragments included                      |
+
+### Why not just read `cursor.parent`?
+
+Because a fragment would break it. In the document above, the second `<li>` is wrapped in a `<>…</>`
+that someone added for formatting, and reading the parent directly cannot see past it:
+
+```ts
+const parentIsUl = cursor => cursor.parent?.node.type === 'element' && cursor.parent.node.name === 'ul';
+
+Array.from(findAll(doc, cursor => named('li')(cursor) && parentIsUl(cursor)));
+// only One -- Two is missed, because its parent is the fragment
+
+Array.from(findAll(doc, cursor => named('li')(cursor) && withParent(named('ul'))(cursor)));
+// One and Two
+```
+
+That is the whole reason these exist: `withParent` and `withChild` treat a `<>…</>` as the children it
+holds, so a wrapper cannot silently change what a query finds. `withAncestor` and `withDescendant`
+have no such subtlety — they simply walk up or down — and you could write them yourself over
+`ancestorsOf` and `walk` in a line or two.
+
+Precisely:
+
+- a node's _effective parent_ is its nearest ancestor that is not a fragment, and it has none when every
+  ancestor up to the root is a fragment — so under a fragment root, `withParent` is never true;
+- a node's _effective children_ are its children with each fragment replaced, in place and in order, by
+  that fragment's own effective children;
+- `withParent` and `withChild` use those, so **a fragment is never anyone's parent or child**:
+  `withParent(isFragment)` can never be true, and `withAncestor(isFragment)` is how to ask instead;
+- `withAncestor` and `withDescendant` test every ancestor or descendant, fragments included — a fragment
+  does not count as _structure_, but it is still a node a matcher may ask about;
+- a fragment is still asked about in its own right, so in `<ul><><li /></></ul>` both the fragment and
+  the `<li>` match `withParent(named('ul'))`: the fragment does literally sit inside the `<ul>`. Spell
+  the combinator as "`B`, and its parent is `A`" — as every example above does — and that never
+  surprises you.
+
+`withDescendant` walks a subtree per candidate, so searching a whole document with it costs a pass per
+node rather than a single pass.
+
+Nothing here recurses. `walk` and the combinators use explicit stacks just as `parse` and `stringify`
+do, so the "nesting has no ceiling" guarantee holds for searching too.
+
+There is no selector-string language. Every matcher is a plain function of a cursor, so one could be
+compiled onto these later — `A > B` is `B` and `withParent(A)`, `A B` is `B` and `withAncestor(A)` —
+with nothing here having to change.
 
 ## What the grammar accepts
 
@@ -149,8 +357,8 @@ chain of identifiers (`Foo.Bar.Baz`, a `JSXMemberExpression`) or a single namesp
 `JSXNamespacedName`), but never both at once — `a.b:c` and `a:b.c` are both rejected, exactly as in
 JSX. An attribute name may be a plain identifier or a single namespaced pair, but never a dotted
 chain: `<a x.y="1" />` is rejected, even though `<a.y />` as a tag name is not. An attribute written
-twice is an error rather than a silent overwrite, and an attribute named `__proto__` is stored as an
-ordinary own property.
+twice is an error rather than a silent overwrite. An attribute named `__proto__` is an ordinary own
+property, because the object holding it has no prototype to replace.
 
 Only `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;` and numeric references such as `&#38;` or `&#x26;`
 are decoded. Every other `&name;` is left exactly as written, so nothing is lost in either direction.
@@ -192,7 +400,11 @@ stringify(parse(printed)); // exactly equals printed
 ```
 
 The first pass through `stringify` normalizes formatting; every pass after that is a fixed point.
-`JSON.parse(JSON.stringify(tree))` is likewise equal to `tree`. The printed document is always
+`JSON.parse(JSON.stringify(tree))` is likewise equal to `tree` in every value it holds — the same keys,
+in the same order, with the same values. The one thing JSON cannot carry is the missing prototype on
+`attributes`, so the revived object inherits from `Object` again: structural comparison still holds,
+while `util.isDeepStrictEqual`, which compares prototypes, does not. A tree assembled by hand may use
+an ordinary object for `attributes`; `stringify` does not care. The printed document is always
 well-formed UTF-16, so writing it to a file or sending it over the wire cannot change it: an unpaired
 surrogate is written as a numeric reference, while a surrogate pair stays literal so astral characters
 like emoji remain readable.
@@ -234,7 +446,9 @@ The suite pairs example tests, which are the readable specification, with proper
 [fast-check](https://github.com/dubzzz/fast-check). The properties assert the round-trip guarantee
 over generated trees and every accepted indent, that `parse` answers arbitrary, truncated and mutated
 input with a tree or a `JSXSyntaxError` and never anything else, that `stringify` either refuses a
-tree or prints one that reads back equal, and the algebraic laws underneath: escaping is undone by
+tree or prints one that reads back equal, that a walk yields every node exactly once in document order
+and that each cursor it yields resolves back to its own node and inverts its parent's children, and the
+algebraic laws underneath: escaping is undone by
 decoding, whitespace normalization is idempotent, and `isElementName`/`isAttributeName` each accept
 exactly the names the parser reads back in their respective position. `just test` runs them on a fixed
 seed so the gate is reproducible; `just fuzz` widens the search.

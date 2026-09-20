@@ -1,3 +1,4 @@
+import { type JSXCursor, type JSXMatcher, rootCursor } from '../src/cursor.ts';
 import { JSXSyntaxError } from '../src/errors.ts';
 import { parse, type ParseOptions } from '../src/parser.ts';
 import type {
@@ -10,8 +11,18 @@ import type {
   JsonValue,
 } from '../src/types.ts';
 
+export function makeAttributes(entries: JSXAttributes = {}): JSXAttributes {
+  const attributes: JSXAttributes = Object.create(null);
+
+  for (const [name, value] of Object.entries(entries)) {
+    Object.defineProperty(attributes, name, { value, writable: true, enumerable: true, configurable: true });
+  }
+
+  return attributes;
+}
+
 export function element(name: string, attributes: JSXAttributes = {}, children: JSXNode[] = []): JSXElement {
-  return { type: 'element', name, attributes, children };
+  return { type: 'element', name, attributes: makeAttributes(attributes), children };
 }
 
 export function fragment(children: JSXNode[] = []): JSXFragment {
@@ -56,4 +67,35 @@ export function syntaxErrorFrom(source: string, options?: ParseOptions): JSXSynt
   }
 
   return error;
+}
+
+export function named(name: string) {
+  return (cursor: JSXCursor): cursor is JSXCursor<JSXElement> =>
+    cursor.node.type === 'element' && cursor.node.name === name;
+}
+
+export function ofType(type: JSXNode['type']): JSXMatcher {
+  return cursor => cursor.node.type === type;
+}
+
+export function withAttribute(name: string): JSXMatcher {
+  return cursor => cursor.node.type === 'element' && Object.hasOwn(cursor.node.attributes, name);
+}
+
+export function pathTo(cursor: JSXCursor): number[] {
+  const path: number[] = [];
+
+  for (let step: JSXCursor | undefined = cursor; step?.parent !== undefined; step = step.parent) {
+    path.push(step.index);
+  }
+
+  return path.reverse();
+}
+
+export function cursorFor(source: string): JSXCursor {
+  return rootCursor(parse(source));
+}
+
+export function label(cursor: JSXCursor): string {
+  return cursor.node.type === 'element' ? cursor.node.name : cursor.node.type;
 }
