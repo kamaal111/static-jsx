@@ -140,6 +140,64 @@ describe('parse', () => {
     });
   });
 
+  describe('rejects a malformed tag name', () => {
+    it('rejects a tag name ending in a dot', () => {
+      expect(syntaxErrorFrom('<a. />')).toMatchObject({
+        message: expect.stringContaining("Expected a name after '.' in a tag name"),
+        line: 1,
+        column: 4,
+      });
+    });
+
+    it('rejects a tag name ending in a colon', () => {
+      expect(syntaxErrorFrom('<a: />')).toMatchObject({
+        message: expect.stringContaining("Expected a name after ':' in a tag name"),
+        line: 1,
+        column: 4,
+      });
+    });
+
+    it('rejects a tag name with two dots in a row', () => {
+      expect(syntaxErrorFrom('<a..b />')).toMatchObject({
+        message: expect.stringContaining("Expected a name after '.' in a tag name"),
+        line: 1,
+        column: 4,
+      });
+    });
+
+    it('rejects a tag name mixing a dot then a colon', () => {
+      expect(syntaxErrorFrom('<a.b:c />')).toMatchObject({
+        message: expect.stringContaining("A tag name cannot mix '.' and ':'"),
+        line: 1,
+        column: 5,
+      });
+    });
+
+    it('rejects a tag name mixing a colon then a dot', () => {
+      expect(syntaxErrorFrom('<a:b.c />')).toMatchObject({
+        message: expect.stringContaining("A tag name cannot mix '.' and ':'"),
+        line: 1,
+        column: 5,
+      });
+    });
+
+    it('rejects a tag name with two colons', () => {
+      expect(syntaxErrorFrom('<a:b:c />')).toMatchObject({
+        message: expect.stringContaining("A tag name cannot hold more than one ':'"),
+        line: 1,
+        column: 5,
+      });
+    });
+
+    it('rejects a tag name that starts with an emoji, which is not a Unicode ID_Start character', () => {
+      expect(syntaxErrorFrom('<😀 />')).toMatchObject({
+        message: expect.stringContaining('Expected a tag name'),
+        line: 1,
+        column: 2,
+      });
+    });
+  });
+
   describe('rejects a malformed attribute', () => {
     it('rejects a value with no attribute name', () => {
       expect(syntaxErrorFrom('<a ="x" />')).toMatchObject({
@@ -170,6 +228,30 @@ describe('parse', () => {
         message: expect.stringContaining('Unterminated attribute value'),
         line: 1,
         column: 6,
+      });
+    });
+
+    it('rejects a dot in an attribute name', () => {
+      expect(syntaxErrorFrom('<a a.b />')).toMatchObject({
+        message: expect.stringContaining("An attribute name cannot hold '.'"),
+        line: 1,
+        column: 5,
+      });
+    });
+
+    it('rejects an attribute name ending in a colon', () => {
+      expect(syntaxErrorFrom('<a a: />')).toMatchObject({
+        message: expect.stringContaining("Expected a name after ':' in an attribute name"),
+        line: 1,
+        column: 6,
+      });
+    });
+
+    it('rejects an attribute name with two colons', () => {
+      expect(syntaxErrorFrom('<a a:b:c />')).toMatchObject({
+        message: expect.stringContaining("An attribute name cannot hold more than one ':'"),
+        line: 1,
+        column: 7,
       });
     });
   });

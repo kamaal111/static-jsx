@@ -6,7 +6,7 @@ import {
   type MutableJsonContainer,
   type MutableJsonValue,
 } from './json-values.ts';
-import { isNamePart, isNameStart } from './names.ts';
+import { isIdentifierPart, isNameStart } from './names.ts';
 import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
 import { normalizeText } from './whitespace.ts';
 
@@ -26,11 +26,15 @@ const SINGLE_QUOTE = 0x27;
 
 const HYPHEN = 0x2d;
 
+const PERIOD = 0x2e;
+
 const SLASH = 0x2f;
 
 const DIGIT_ZERO = 0x30;
 
 const DIGIT_NINE = 0x39;
+
+const COLON = 0x3a;
 
 const LESS_THAN = 0x3c;
 
@@ -47,6 +51,8 @@ const LOWERCASE_E = 0x65;
 const LEFT_BRACE = 0x7b;
 
 const RIGHT_BRACE = 0x7d;
+
+const MAX_BMP_CODE_POINT = 0xffff;
 
 const PROTOTYPE_KEY = '__proto__';
 
@@ -297,7 +303,7 @@ function readTag(scanner: Scanner, limits: Limits): Tag {
 
 /** Returns `undefined` for a fragment's empty tag, and rejects anything else that is not a name. */
 function readTagName(scanner: Scanner, limits: Limits): string | undefined {
-  const name = readName(scanner, limits);
+  const name = readElementName(scanner, limits);
 
   if (name === undefined && peek(scanner) !== GREATER_THAN) {
     throw new JSXSyntaxError('Expected a tag name', scanner.source, scanner.index);
@@ -326,7 +332,7 @@ function readAttributes(scanner: Scanner, tagStart: number, limits: Limits): JSX
     }
 
     const nameStart = scanner.index;
-    const name = readName(scanner, limits);
+    const name = readAttributeName(scanner, limits);
 
     if (name === undefined) {
       throw new JSXSyntaxError('Expected an attribute name', source, nameStart);
@@ -569,29 +575,119 @@ function readText(scanner: Scanner): string {
   return sawAmpersand ? decodeEntities(normalized) : normalized;
 }
 
-function readName(scanner: Scanner, limits: Limits): string | undefined {
+/** How many UTF-16 code units a code point takes: 2 for an astral character, 1 for a BMP one. */
+function codePointWidth(codePoint: number): number {
+  return codePoint > MAX_BMP_CODE_POINT ? 2 : 1;
+}
+
+/** Reads one identifier segment: no `.`, no `:`. Walks by Unicode code point, not UTF-16 code unit. */
+function readIdentifier(scanner: Scanner): string | undefined {
   const { source } = scanner;
   const start = scanner.index;
+  const startCodePoint = source.codePointAt(start);
 
-  if (!isNameStart(source.charCodeAt(start))) {
+  if (startCodePoint === undefined || !isNameStart(startCodePoint)) {
     return undefined;
   }
 
-  let index = start + 1;
+  let index = start + codePointWidth(startCodePoint);
 
-  while (index < source.length && isNamePart(source.charCodeAt(index))) {
-    index += 1;
-  }
+  while (index < source.length) {
+    const codePoint = source.codePointAt(index);
 
-  const length = index - start;
+    if (codePoint === undefined || !isIdentifierPart(codePoint)) {
+      break;
+    }
 
-  if (length > limits.maxNameLength) {
-    throw new JSXLimitError('maxNameLength', limits.maxNameLength, length, source, start);
+    index += codePointWidth(codePoint);
   }
 
   scanner.index = index;
 
   return source.slice(start, index);
+}
+
+/** Enforces `maxNameLength` over the whole name matched since `start`, segments and separators alike. */
+function finishName(scanner: Scanner, limits: Limits, start: number): string {
+  const { source } = scanner;
+  const length = scanner.index - start;
+
+  if (length > limits.maxNameLength) {
+    throw new JSXLimitError('maxNameLength', limits.maxNameLength, length, source, start);
+  }
+
+  return source.slice(start, scanner.index);
+}
+
+/**
+ * A tag name is an identifier, a dot-chain of identifiers (`Foo.Bar.Baz`), or a single
+ * `namespace:name` pair — never a mix of `.` and `:`.
+ */
+function readElementName(scanner: Scanner, limits: Limits): string | undefined {
+  const { source } = scanner;
+  const start = scanner.index;
+
+  if (readIdentifier(scanner) === undefined) {
+    return undefined;
+  }
+
+  if (peek(scanner) === PERIOD) {
+    while (peek(scanner) === PERIOD) {
+      scanner.index += 1;
+
+      if (readIdentifier(scanner) === undefined) {
+        throw new JSXSyntaxError("Expected a name after '.' in a tag name", source, scanner.index);
+      }
+    }
+
+    if (peek(scanner) === COLON) {
+      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", source, scanner.index);
+    }
+  } else if (peek(scanner) === COLON) {
+    scanner.index += 1;
+
+    if (readIdentifier(scanner) === undefined) {
+      throw new JSXSyntaxError("Expected a name after ':' in a tag name", source, scanner.index);
+    }
+
+    if (peek(scanner) === COLON) {
+      throw new JSXSyntaxError("A tag name cannot hold more than one ':'", source, scanner.index);
+    }
+
+    if (peek(scanner) === PERIOD) {
+      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", source, scanner.index);
+    }
+  }
+
+  return finishName(scanner, limits, start);
+}
+
+/** An attribute name is an identifier or a single `namespace:name` pair — never a dot. */
+function readAttributeName(scanner: Scanner, limits: Limits): string | undefined {
+  const { source } = scanner;
+  const start = scanner.index;
+
+  if (readIdentifier(scanner) === undefined) {
+    return undefined;
+  }
+
+  if (peek(scanner) === COLON) {
+    scanner.index += 1;
+
+    if (readIdentifier(scanner) === undefined) {
+      throw new JSXSyntaxError("Expected a name after ':' in an attribute name", source, scanner.index);
+    }
+
+    if (peek(scanner) === COLON) {
+      throw new JSXSyntaxError("An attribute name cannot hold more than one ':'", source, scanner.index);
+    }
+  }
+
+  if (peek(scanner) === PERIOD) {
+    throw new JSXSyntaxError("An attribute name cannot hold '.'", source, scanner.index);
+  }
+
+  return finishName(scanner, limits, start);
 }
 
 /** Assigns an attribute without letting one named `__proto__` reach the prototype chain. */

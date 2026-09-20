@@ -9,11 +9,38 @@ const DEFAULT_RUNS = 200;
 
 const NAME_START_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$'.split('');
 
-const NAME_PART_CHARACTERS = [...NAME_START_CHARACTERS, ...'0123456789-.:'.split('')];
+const IDENTIFIER_PART_CHARACTERS = [...NAME_START_CHARACTERS, ...'0123456789-'.split('')];
 
 const DANGEROUS_NAMES = ['__proto__', 'constructor', 'prototype', 'toString'];
 
-const INVALID_NAMES = ['', '1a', 'a b', '<a', 'a/', 'a"', 'a>', ' a', 'a\n', '-a', '.a'];
+/** Non-ASCII identifiers real JSX accepts: an accented Latin letter, CJK, and an astral-plane letter. */
+const UNICODE_IDENTIFIER_FIXTURES = ['café', '日本語', 'Ω', '𝔉oo'];
+
+const INVALID_NAMES = [
+  '',
+  '1a',
+  'a b',
+  '<a',
+  'a/',
+  'a"',
+  'a>',
+  ' a',
+  'a\n',
+  '-a',
+  '.a',
+  'a.',
+  'a:',
+  'a..b',
+  'a::b',
+  'a.b:c',
+  'a:b.c',
+  'a:b:c',
+  '😀',
+  '😀a',
+];
+
+/** Valid as an element name (a member expression), but never valid as an attribute name. */
+const MEMBER_EXPRESSION_ONLY_FIXTURES = ['a.b', 'a.b.c', 'Foo.Bar'];
 
 const TEXT_PIECES = [
   'a',
@@ -65,21 +92,47 @@ export const PROPERTY_OPTIONS = propertyOptions();
 
 export const arbBinaryString = fc.string({ unit: 'binary' });
 
-export const arbName: fc.Arbitrary<string> = fc.oneof(
+export const arbIdentifier: fc.Arbitrary<string> = fc.oneof(
   { weight: 4, arbitrary: fc.constantFrom(...NAME_START_CHARACTERS) },
   { weight: 1, arbitrary: fc.constantFrom(...DANGEROUS_NAMES) },
+  { weight: 1, arbitrary: fc.constantFrom(...UNICODE_IDENTIFIER_FIXTURES) },
   {
     weight: 8,
     arbitrary: fc
       .tuple(
         fc.constantFrom(...NAME_START_CHARACTERS),
-        fc.array(fc.constantFrom(...NAME_PART_CHARACTERS), { maxLength: 8 }),
+        fc.array(fc.constantFrom(...IDENTIFIER_PART_CHARACTERS), { maxLength: 8 }),
       )
       .map(([start, parts]) => start + parts.join('')),
   },
 );
 
-export const arbInvalidName: fc.Arbitrary<string> = fc.constantFrom(...INVALID_NAMES);
+export const arbMemberExpressionName: fc.Arbitrary<string> = fc
+  .array(arbIdentifier, { minLength: 2, maxLength: 4 })
+  .map(parts => parts.join('.'));
+
+export const arbNamespacedName: fc.Arbitrary<string> = fc
+  .tuple(arbIdentifier, arbIdentifier)
+  .map(([namespace, local]) => `${namespace}:${local}`);
+
+export const arbElementName: fc.Arbitrary<string> = fc.oneof(
+  { weight: 8, arbitrary: arbIdentifier },
+  { weight: 1, arbitrary: arbMemberExpressionName },
+  { weight: 1, arbitrary: arbNamespacedName },
+);
+
+export const arbAttributeName: fc.Arbitrary<string> = fc.oneof(
+  { weight: 8, arbitrary: arbIdentifier },
+  { weight: 1, arbitrary: arbNamespacedName },
+);
+
+export const arbInvalidElementName: fc.Arbitrary<string> = fc.constantFrom(...INVALID_NAMES);
+
+export const arbInvalidAttributeName: fc.Arbitrary<string> = fc.oneof(
+  fc.constantFrom(...INVALID_NAMES),
+  fc.constantFrom(...MEMBER_EXPRESSION_ONLY_FIXTURES),
+  arbMemberExpressionName,
+);
 
 export const arbWritableNumber = fc
   .double({ noNaN: true, noDefaultInfinity: true })
@@ -194,16 +247,19 @@ function treeArbitrary(parts: TreeArbitraries): fc.Arbitrary<JSXRootNode> {
 }
 
 export const arbTree = treeArbitrary({
-  arbNodeName: arbName,
-  arbAttributeName: arbName,
+  arbNodeName: arbElementName,
+  arbAttributeName: arbAttributeName,
   arbValue: arbWritableJsonValue,
   arbTextValue: arbText,
   makeChildren: legalChildren,
 });
 
 export const arbAnyTree = treeArbitrary({
-  arbNodeName: fc.oneof({ weight: 3, arbitrary: arbName }, { weight: 1, arbitrary: arbInvalidName }),
-  arbAttributeName: fc.oneof({ weight: 3, arbitrary: arbName }, { weight: 1, arbitrary: arbInvalidName }),
+  arbNodeName: fc.oneof({ weight: 3, arbitrary: arbElementName }, { weight: 1, arbitrary: arbInvalidElementName }),
+  arbAttributeName: fc.oneof(
+    { weight: 3, arbitrary: arbAttributeName },
+    { weight: 1, arbitrary: arbInvalidAttributeName },
+  ),
   arbValue: arbAnyJsonValue,
   arbTextValue: fc.oneof({ weight: 3, arbitrary: arbText }, { weight: 1, arbitrary: fc.constant('') }),
   makeChildren: children => [...children],

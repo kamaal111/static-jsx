@@ -1,7 +1,7 @@
 import { escapeAttribute, escapeText } from './entities.ts';
 import { JSXStringifyError } from './errors.ts';
 import { isJsonContainer, isJsonString, isUnwritableNumber, type JsonContainer } from './json-values.ts';
-import { isName } from './names.ts';
+import { isAttributeName, isElementName } from './names.ts';
 import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
 import { invariant } from './utils.ts';
 
@@ -115,7 +115,7 @@ function writeNode(chunks: string[], stack: WriteTask[], node: JSXNode, depth: n
 
   const isElement = node.type === 'element';
 
-  if (isElement && !isName(node.name)) {
+  if (isElement && !isElementName(node.name)) {
     throw new JSXStringifyError(`"${node.name}" cannot be written as an element name`);
   }
 
@@ -198,7 +198,7 @@ function attributesText(attributes: JSXAttributes): string {
 
 /** A bare name means `true`, a quoted value means a string, and everything else is JSON in braces. */
 function attributeText(name: string, value: JsonValue): string {
-  if (!isName(name)) {
+  if (!isAttributeName(name)) {
     throw new JSXStringifyError(`"${name}" cannot be written as an attribute name`);
   }
 

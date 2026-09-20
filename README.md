@@ -30,15 +30,15 @@ ignored. Throws a `JSXSyntaxError` for anything else.
 `options` bounds how much a single call will parse, for untrusted input. Every limit is optional
 and unlimited by default:
 
-| Option                    | Bounds                                                                |
-| ------------------------- | --------------------------------------------------------------------- |
-| `maxSourceLength`         | the length of `source`                                                |
-| `maxDepth`                | nesting depth of elements and fragments; the root is depth 1          |
-| `maxNodes`                | total nodes in the tree — elements, fragments, text and expressions   |
-| `maxAttributesPerNode`    | attributes on a single opening tag                                    |
-| `maxChildrenPerNode`      | children on a single element or fragment                              |
-| `maxNameLength`           | length of a tag or attribute name                                     |
-| `maxAttributeValueLength` | length of a quoted string's contents, or the JSON between `{` and `}` |
+| Option                    | Bounds                                                                 |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `maxSourceLength`         | the length of `source`                                                 |
+| `maxDepth`                | nesting depth of elements and fragments; the root is depth 1           |
+| `maxNodes`                | total nodes in the tree — elements, fragments, text and expressions    |
+| `maxAttributesPerNode`    | attributes on a single opening tag                                     |
+| `maxChildrenPerNode`      | children on a single element or fragment                               |
+| `maxNameLength`           | length of a tag or attribute name, including any `.` or `:` separators |
+| `maxAttributeValueLength` | length of a quoted string's contents, or the JSON between `{` and `}`  |
 
 Exceeding any of them throws a `JSXLimitError` instead of building the rest of the tree:
 
@@ -120,9 +120,16 @@ interface JSXExpression {
 | `{42}` as a child                              | an expression node holding `42`            |
 | `a &amp; b`                                    | the text `a & b`                           |
 
-Attribute and tag names may hold letters, digits, `-`, `.`, `:`, `_` and `$`, and must not start
-with a digit. An attribute written twice is an error rather than a silent overwrite, and an
-attribute named `__proto__` is stored as an ordinary own property.
+Names follow JSX's own identifier grammar. A plain identifier starts with a Unicode `ID_Start`
+character (or `_`/`$`) and continues with `ID_Continue` characters, digits, `-`, or the zero-width
+joiner/non-joiner — so `café`, `日本語` and `aria-label` are all identifiers, but a name may not start
+with a digit or a character (such as an emoji) that is not `ID_Start`. A tag name may also be a dotted
+chain of identifiers (`Foo.Bar.Baz`, a `JSXMemberExpression`) or a single namespaced pair (`ns:name`, a
+`JSXNamespacedName`), but never both at once — `a.b:c` and `a:b.c` are both rejected, exactly as in
+JSX. An attribute name may be a plain identifier or a single namespaced pair, but never a dotted
+chain: `<a x.y="1" />` is rejected, even though `<a.y />` as a tag name is not. An attribute written
+twice is an error rather than a silent overwrite, and an attribute named `__proto__` is stored as an
+ordinary own property.
 
 Only `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;` and numeric references such as `&#38;` or `&#x26;`
 are decoded. Every other `&name;` is left exactly as written, so nothing is lost in either direction.
@@ -173,7 +180,8 @@ Every tree `parse` returns satisfies all three. A tree assembled by hand has to 
 have produced, which means:
 
 - every value is one a JSON round trip preserves, so no `Infinity`, `-Infinity`, `NaN` or `-0`;
-- every element and attribute name is a name, per the rules above;
+- every element name satisfies the tag-name grammar and every attribute name satisfies the
+  (narrower) attribute-name grammar, per the rules above;
 - no text node is empty, since printing one leaves nothing behind to read;
 - no two text nodes are adjacent, since printing them leaves nothing to tell them apart and they
   come back as one;
@@ -206,9 +214,9 @@ The suite pairs example tests, which are the readable specification, with proper
 over generated trees and every accepted indent, that `parse` answers arbitrary, truncated and mutated
 input with a tree or a `JSXSyntaxError` and never anything else, that `stringify` either refuses a
 tree or prints one that reads back equal, and the algebraic laws underneath: escaping is undone by
-decoding, whitespace normalization is idempotent, and `isName` accepts exactly the names the parser
-reads back. `just test` runs them on a fixed seed so the gate is reproducible; `just fuzz` widens the
-search.
+decoding, whitespace normalization is idempotent, and `isElementName`/`isAttributeName` each accept
+exactly the names the parser reads back in their respective position. `just test` runs them on a fixed
+seed so the gate is reproducible; `just fuzz` widens the search.
 
 The `Fuzz` job in CI runs the properties on a new random seed on every push, so a counterexample
 shows up while the change is still in front of someone rather than after it lands. The seed that

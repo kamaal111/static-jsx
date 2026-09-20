@@ -2,15 +2,17 @@ import fc from 'fast-check';
 
 import {
   PROPERTY_OPTIONS,
+  arbAttributeName,
   arbBinaryString,
-  arbInvalidName,
-  arbName,
+  arbElementName,
+  arbInvalidAttributeName,
+  arbInvalidElementName,
   arbTextLike,
   arbWritableNumber,
 } from './arbitraries.ts';
 import { element, expression } from './helpers.ts';
 import { decodeEntities, escapeAttribute, escapeText } from '../src/entities.ts';
-import { isName } from '../src/names.ts';
+import { isAttributeName, isElementName } from '../src/names.ts';
 import { parse } from '../src/parser.ts';
 import { stringify } from '../src/stringify.ts';
 import type { JsonValue } from '../src/types.ts';
@@ -79,10 +81,10 @@ describe('normalizeText', () => {
   });
 });
 
-describe('isName', () => {
+describe('isElementName', () => {
   it('accepts exactly the names the parser reads back unchanged', () => {
     fc.assert(
-      fc.property(fc.oneof(arbName, arbInvalidName, arbBinaryString), candidate => {
+      fc.property(fc.oneof(arbElementName, arbInvalidElementName, arbBinaryString), candidate => {
         let parsedName: string | undefined;
 
         try {
@@ -92,7 +94,30 @@ describe('isName', () => {
           parsedName = undefined;
         }
 
-        expect(isName(candidate)).toBe(parsedName === candidate);
+        expect(isElementName(candidate)).toBe(parsedName === candidate);
+      }),
+      PROPERTY_OPTIONS,
+    );
+  });
+});
+
+describe('isAttributeName', () => {
+  it('accepts exactly the names the parser reads back unchanged', () => {
+    fc.assert(
+      fc.property(fc.oneof(arbAttributeName, arbInvalidAttributeName, arbBinaryString), candidate => {
+        let parsedName: string | undefined;
+
+        try {
+          const root = parse(`<a ${candidate} />`);
+          parsedName =
+            root.type === 'element' && Object.keys(root.attributes).length === 1
+              ? Object.keys(root.attributes)[0]
+              : undefined;
+        } catch {
+          parsedName = undefined;
+        }
+
+        expect(isAttributeName(candidate)).toBe(parsedName === candidate);
       }),
       PROPERTY_OPTIONS,
     );

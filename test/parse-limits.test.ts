@@ -195,6 +195,26 @@ describe('parse', () => {
         actualValue: 6,
       });
     });
+
+    it('counts every segment and separator of a dotted tag name', () => {
+      expect(() => parse('<a.bb />', { maxNameLength: 4 })).not.toThrow();
+
+      expect(limitErrorFrom('<a.bb />', { maxNameLength: 3 })).toMatchObject({
+        limit: 'maxNameLength',
+        limitValue: 3,
+        actualValue: 4,
+      });
+    });
+
+    it('counts both sides and the separator of a namespaced tag name', () => {
+      expect(() => parse('<ns:a />', { maxNameLength: 4 })).not.toThrow();
+
+      expect(limitErrorFrom('<ns:a />', { maxNameLength: 3 })).toMatchObject({
+        limit: 'maxNameLength',
+        limitValue: 3,
+        actualValue: 4,
+      });
+    });
   });
 
   describe('enforces maxAttributeValueLength', () => {
