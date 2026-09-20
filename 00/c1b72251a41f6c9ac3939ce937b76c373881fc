@@ -1,0 +1,55 @@
+test/helpers.ts
+  s_37b0a87ec7d2e5::t_42e2f9f5220054 1-2
+  s_37b0a87ec7d2e5::t_5db2bc2ae87b45 36-60
+  s_63ef790575c9c5::t_1bbfdc6ebb9673 61
+test/index.test-d.ts
+  s_37b0a87ec7d2e5::t_b2ab5a33e2576e 17,21
+  s_37b0a87ec7d2e5::t_2aa9d0328d631c 13-14,18-20,22
+  s_37b0a87ec7d2e5::t_4aae3db1d3f666 15-16
+src/parser.ts
+  s_37b0a87ec7d2e5::t_f218ecef7fdcf5 440
+  s_37b0a87ec7d2e5::t_a0f70a2bc4850c 186
+  s_37b0a87ec7d2e5::t_639b50a695f9f5 185,341,351,365-385,398-401,403-404,433
+  s_37b0a87ec7d2e5::t_0d8cdb605c01e7 9,93-98,118-121,123-126,130,143-146,148-169,175-184,439
+  s_37b0a87ec7d2e5::t_b2ab5a33e2576e 142,147,170-174
+  s_37b0a87ec7d2e5::t_89dfa119dd6545 352,402,434-438
+test/parse-allowed-elements.test.ts
+  s_37b0a87ec7d2e5::t_42e2f9f5220054 2
+  s_37b0a87ec7d2e5::t_8b0c1b228f4094 65-68
+  s_37b0a87ec7d2e5::t_8fbed8330e9174 85-91
+  s_37b0a87ec7d2e5::t_5db2bc2ae87b45 1
+  s_37b0a87ec7d2e5::t_920744c7e85189 3,8,10-64,69-84,92-94
+  s_37b0a87ec7d2e5::t_2530c4de1a948d 4-7,9
+test/parse-errors.test.ts
+  s_37b0a87ec7d2e5::t_42e2f9f5220054 1
+README.md
+  s_37b0a87ec7d2e5::t_1c82bf5291384b 63
+  s_37b0a87ec7d2e5::t_2aa9d0328d631c 30-46,59-62
+  s_37b0a87ec7d2e5::t_8b0c1b228f4094 50
+test/parse-fuzz.test.ts
+  s_37b0a87ec7d2e5::t_5db2bc2ae87b45 6,69,81,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "00c1b72251a41f6c9ac3939ce937b76c373881fc",
+  "prompts": {},
+  "sessions": {
+    "s_37b0a87ec7d2e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c040-b40f-7a81-aa02-837fdb6d8de8",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": null
+    },
+    "s_63ef790575c9c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d4802e7-c1ac-4ffe-bd88-17f9ccb93cdb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Kamaal Farah <kamaal.f1@gmail.com>"
+    }
+  }
+}
