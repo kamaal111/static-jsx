@@ -12,7 +12,7 @@ const DEFAULT_INDENT = '  ';
 const NON_LAYOUT = /[^ \t\r\n]/;
 
 const UNWRITABLE_NUMBER_MESSAGE =
-  'A value holds Infinity, -Infinity or NaN, which JSON writes as null, so it would not read back';
+  'A value holds Infinity, -Infinity, NaN or -0, which JSON writes as null or 0, so it would not read back';
 
 const JSON_TASK_KINDS = { VALUE: 'value', LITERAL: 'literal', LEAVE: 'leave' } as const;
 

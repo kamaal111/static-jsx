@@ -6,7 +6,9 @@ export default defineConfig({
   options: {
     reportUnusedDisableDirectives: 'error',
   },
+  plugins: ['vitest'],
   rules: {
+    'vitest/no-conditional-expect': 'error',
     'no-restricted-globals': [
       'error',
       {

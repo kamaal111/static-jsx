@@ -81,20 +81,24 @@ describe('a number that is merely rounded', () => {
 });
 
 describe('negative zero', () => {
-  it('becomes zero in an expression, the value a round trip would have produced anyway', () => {
-    expect(asExpression(parse('<a>{-0}</a>').children[0]).value).toBe(0);
+  it('is refused in an expression, because JSON writes it back as a positive zero', () => {
+    expect(() => parse('<a>{-0}</a>')).toThrow(JSXSyntaxError);
   });
 
-  it('becomes zero in an attribute', () => {
-    expect(asElement(parse('<a n={-0} />')).attributes.n).toBe(0);
+  it('says that the value would not survive a round trip', () => {
+    expect(() => parse('<a>{-0}</a>')).toThrow(/would not survive a round trip/);
   });
 
-  it('becomes zero inside an array', () => {
-    expect(asElement(parse('<a meta={[-0]} />')).attributes.meta).toEqual([0]);
+  it('is refused in an attribute', () => {
+    expect(() => parse('<a n={-0} />')).toThrow(JSXSyntaxError);
   });
 
-  it('becomes zero inside an object nested in an array', () => {
-    expect(asElement(parse('<a meta={[{"k":-0}]} />')).attributes.meta).toEqual([{ k: 0 }]);
+  it('is refused inside an array', () => {
+    expect(() => parse('<a meta={[-0]} />')).toThrow(JSXSyntaxError);
+  });
+
+  it('is refused inside an object nested in an array', () => {
+    expect(() => parse('<a meta={[{"k":-0}]} />')).toThrow(JSXSyntaxError);
   });
 
   it('leaves every other negative number alone', () => {
@@ -105,8 +109,8 @@ describe('negative zero', () => {
     expect(asExpression(parse('<a>{-0.5}</a>').children[0]).value).toBe(-0.5);
   });
 
-  it('becomes zero when a number underflows to it rather than being written as it', () => {
-    expect(asExpression(parse('<a>{-1e-400}</a>').children[0]).value).toBe(0);
+  it('is refused when a number underflows to it rather than being written as it', () => {
+    expect(() => parse('<a>{-1e-400}</a>')).toThrow(JSXSyntaxError);
   });
 });
 
@@ -119,12 +123,12 @@ describe('a value whose only `e` spells a boolean', () => {
     expect(() => parse('<a meta={{"on":true,"n":1e400}} />')).toThrow(/would not survive a round trip/);
   });
 
-  it('still normalizes a negative zero standing next to them', () => {
-    expect(asElement(parse('<a meta={{"on":true,"n":-0}} />')).attributes.meta).toEqual({ on: true, n: 0 });
+  it('still refuses a negative zero standing next to them', () => {
+    expect(() => parse('<a meta={{"on":true,"n":-0}} />')).toThrow(JSXSyntaxError);
   });
 
-  it('still normalizes a number that underflows to negative zero with no `-0` in its text', () => {
-    expect(asExpression(parse('<a>{[true,-1e-400]}</a>').children[0]).value).toEqual([true, 0]);
+  it('still refuses a number that underflows to negative zero with no `-0` in its text', () => {
+    expect(() => parse('<a>{[true,-1e-400]}</a>')).toThrow(JSXSyntaxError);
   });
 
   it('keeps a quoted number whose exponent would have overflowed outside the quotes', () => {

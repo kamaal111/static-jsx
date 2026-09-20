@@ -83,6 +83,22 @@ describe('a value JSON would not write back', () => {
     expect(() => stringify(element('a', { n: NaN }))).toThrow(JSXStringifyError);
   });
 
+  it('refuses negative zero, which JSON writes as a positive zero', () => {
+    expect(() => stringify(element('a', { n: -0 }))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses negative zero in an expression child', () => {
+    expect(() => stringify(element('a', {}, [expression(-0)]))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses negative zero hidden inside an array', () => {
+    expect(() => stringify(element('a', { meta: [-0] }))).toThrow(JSXStringifyError);
+  });
+
+  it('still prints a positive zero, which reads back as itself', () => {
+    expect(stringify(element('a', { n: 0 }))).toBe('<a n={0} />');
+  });
+
   it('refuses one hidden inside an object in an array', () => {
     expect(() => stringify(element('a', { meta: [{ k: Infinity }] }))).toThrow(JSXStringifyError);
   });

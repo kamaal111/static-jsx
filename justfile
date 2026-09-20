@@ -35,6 +35,10 @@ test-watch:
 bench:
     {{ PNR }} bench
 
+# Run the property tests with a random seed and a high run count
+fuzz runs='20000':
+    FUZZ_SEED=random FUZZ_RUNS={{ runs }} {{ PNR }} test
+
 # Compile package
 compile:
     {{ PNR }} compile

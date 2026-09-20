@@ -25,9 +25,9 @@ export function isJsonContainer(value: JsonValue | MutableJsonValue): value is J
   return value !== null && typeof value === 'object';
 }
 
-/** `Infinity` and `NaN` are the values `JSON.stringify` quietly turns into `null`. */
+/** `Infinity`, `NaN` and `-0` are the values `JSON.stringify` quietly turns into `null` or `0`. */
 export function isUnwritableNumber(value: JsonValue): value is number {
-  return typeof value === 'number' && !Number.isFinite(value);
+  return typeof value === 'number' && (!Number.isFinite(value) || Object.is(value, -0));
 }
 
 /** The one `JsonValue` member a printer quotes instead of handing to `JSON.stringify`. */
