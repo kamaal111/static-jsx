@@ -20,14 +20,6 @@ const tree = parse('<card title="Hello" count={3} open>Some text</card>');
 stringify(tree); // '<card title="Hello" count={3} open>Some text</card>'
 ```
 
-## Install
-
-```sh
-pnpm add @kamaalio/static-jsx
-```
-
-Node.js 26 or newer. ESM only, no runtime dependencies.
-
 ## API
 
 ### `parse(source: string): JSXRootNode`
