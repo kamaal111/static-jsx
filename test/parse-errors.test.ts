@@ -1,19 +1,6 @@
+import { syntaxErrorFrom } from './helpers.ts';
 import { JSXSyntaxError, StaticJSXError } from '../src/errors.ts';
 import { parse } from '../src/parser.ts';
-
-function syntaxErrorFrom(source: string): JSXSyntaxError {
-  try {
-    parse(source);
-  } catch (error) {
-    if (error instanceof JSXSyntaxError) {
-      return error;
-    }
-
-    throw error;
-  }
-
-  throw new Error(`Expected ${JSON.stringify(source)} to be rejected, but it parsed`);
-}
 
 describe('parse', () => {
   describe('rejects a malformed document', () => {
