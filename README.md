@@ -22,10 +22,32 @@ stringify(tree); // '<card title="Hello" count={3} open>Some text</card>'
 
 ## API
 
-### `parse(source: string): JSXRootNode`
+### `parse(source: string, options?: ParseOptions): JSXRootNode`
 
 Parses a document holding exactly one root element or fragment. Whitespace around the root is
 ignored. Throws a `JSXSyntaxError` for anything else.
+
+`options` bounds how much a single call will parse, for untrusted input. Every limit is optional
+and unlimited by default:
+
+| Option                    | Bounds                                                                |
+| ------------------------- | --------------------------------------------------------------------- |
+| `maxSourceLength`         | the length of `source`                                                |
+| `maxDepth`                | nesting depth of elements and fragments; the root is depth 1          |
+| `maxNodes`                | total nodes in the tree — elements, fragments, text and expressions   |
+| `maxAttributesPerNode`    | attributes on a single opening tag                                    |
+| `maxChildrenPerNode`      | children on a single element or fragment                              |
+| `maxNameLength`           | length of a tag or attribute name                                     |
+| `maxAttributeValueLength` | length of a quoted string's contents, or the JSON between `{` and `}` |
+
+Exceeding any of them throws a `JSXLimitError` instead of building the rest of the tree:
+
+```
+Exceeded maxDepth (2); found 3 (1:7)
+
+1 | <a><b><c /></b></a>
+  |       ^
+```
 
 ### `stringify(node: JSXRootNode, options?: StringifyOptions): string`
 
@@ -40,9 +62,9 @@ else. See [Round-tripping](#round-tripping).
 
 ### Errors
 
-`JSXSyntaxError` and `JSXStringifyError` both extend `StaticJSXError`, so every error this package
-throws can be caught as one group. A syntax error carries `offset`, `line`, `column` and a
-ready-to-print `frame`:
+`JSXSyntaxError`, `JSXLimitError` and `JSXStringifyError` all extend `StaticJSXError`, so every
+error this package throws can be caught as one group. Both `JSXSyntaxError` and `JSXLimitError`
+carry `offset`, `line`, `column` and a ready-to-print `frame`:
 
 ```
 Expected a quoted string or a `{…}` JSON value after `=` (2:10)
@@ -50,6 +72,11 @@ Expected a quoted string or a `{…}` JSON value after `=` (2:10)
 2 |   <a foo=bar />
   |          ^
 ```
+
+A `JSXLimitError` additionally carries `limit` (which `ParseOptions` field was exceeded),
+`limitValue` (what it was set to) and `actualValue` (what the source held instead), so a caller can
+tell a limit violation apart from malformed input and react to it — e.g. reject the request as too
+large instead of reporting it as a bad document.
 
 ## The tree
 
@@ -155,10 +182,12 @@ have produced, which means:
 `stringify` throws a `JSXStringifyError` for each of those rather than print something that would
 read back as a different tree.
 
-Nesting has no ceiling. `parse` and `stringify` walk the tree, and the values inside it, with
-explicit stacks, and Node 26 walks JSON iteratively as well, so all three guarantees hold however deep
-a document goes. A value that refers to itself is the one thing `JSON.stringify` will not write, and
-that is reported as a `JSXStringifyError` rather than left to escape as a `TypeError`.
+Nesting has no ceiling by default. `parse` and `stringify` walk the tree, and the values inside it,
+with explicit stacks, and Node 26 walks JSON iteratively as well, so all three guarantees hold however
+deep a document goes — a `maxDepth` in `ParseOptions` only ever adds a chosen bound on top of that, it
+is never needed to keep the call stack safe. A value that refers to itself is the one thing
+`JSON.stringify` will not write, and that is reported as a `JSXStringifyError` rather than left to
+escape as a `TypeError`.
 
 ## Development
 

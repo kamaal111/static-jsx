@@ -1,5 +1,5 @@
 import { decodeEntities } from './entities.ts';
-import { JSXSyntaxError } from './errors.ts';
+import { JSXLimitError, JSXSyntaxError } from './errors.ts';
 import {
   isJsonContainer,
   isUnwritableNumber,
@@ -82,17 +82,61 @@ interface CloseTag {
 
 type Tag = OpenTag | CloseTag;
 
+/** Every limit `parse` can enforce. All are unlimited unless given a finite value. */
+export interface ParseOptions {
+  /** Maximum length of the source string. Defaults to unlimited. */
+  maxSourceLength?: number;
+  /** Maximum nesting depth of elements and fragments; the root is depth 1. Defaults to unlimited. */
+  maxDepth?: number;
+  /** Maximum number of nodes (elements, fragments, text nodes, expressions) in the tree. Defaults to unlimited. */
+  maxNodes?: number;
+  /** Maximum number of attributes on a single opening tag. Defaults to unlimited. */
+  maxAttributesPerNode?: number;
+  /** Maximum number of children on a single element or fragment. Defaults to unlimited. */
+  maxChildrenPerNode?: number;
+  /** Maximum length of a tag or attribute name. Defaults to unlimited. */
+  maxNameLength?: number;
+  /**
+   * Maximum length of an attribute value's raw source text: a quoted string's contents, or the
+   * JSON between `{` and `}`. Defaults to unlimited.
+   */
+  maxAttributeValueLength?: number;
+}
+
+/** Resolved limits plus the running totals `parse` enforces them against. */
+type Limits = Readonly<Required<ParseOptions>> & { nodeCount: number };
+
+function resolveLimits(options: ParseOptions | undefined): Limits {
+  return {
+    maxSourceLength: options?.maxSourceLength ?? Infinity,
+    maxDepth: options?.maxDepth ?? Infinity,
+    maxNodes: options?.maxNodes ?? Infinity,
+    maxAttributesPerNode: options?.maxAttributesPerNode ?? Infinity,
+    maxChildrenPerNode: options?.maxChildrenPerNode ?? Infinity,
+    maxNameLength: options?.maxNameLength ?? Infinity,
+    maxAttributeValueLength: options?.maxAttributeValueLength ?? Infinity,
+    nodeCount: 0,
+  };
+}
+
 /**
  * Parses a static JSX document into a JSON-compatible tree.
  *
  * The document must hold exactly one root element or fragment; whitespace around it is ignored.
  *
  * @throws {JSXSyntaxError} when the source is not valid static JSX.
+ * @throws {JSXLimitError} when the source exceeds a limit configured in `options`.
  */
-export function parse(source: string): JSXRootNode {
+export function parse(source: string, options?: ParseOptions): JSXRootNode {
+  const limits = resolveLimits(options);
+
+  if (source.length > limits.maxSourceLength) {
+    throw new JSXLimitError('maxSourceLength', limits.maxSourceLength, source.length, source, 0);
+  }
+
   const scanner: Scanner = { source, index: 0 };
   skipWhitespace(scanner);
-  const root = parseTree(scanner);
+  const root = parseTree(scanner, limits);
   skipWhitespace(scanner);
 
   if (scanner.index < source.length) {
@@ -102,11 +146,27 @@ export function parse(source: string): JSXRootNode {
   return root;
 }
 
+function countNode(limits: Limits, source: string, offset: number): void {
+  limits.nodeCount += 1;
+
+  if (limits.nodeCount > limits.maxNodes) {
+    throw new JSXLimitError('maxNodes', limits.maxNodes, limits.nodeCount, source, offset);
+  }
+}
+
+function countChild(limits: Limits, children: readonly JSXNode[], source: string, offset: number): void {
+  const count = children.length + 1;
+
+  if (count > limits.maxChildrenPerNode) {
+    throw new JSXLimitError('maxChildrenPerNode', limits.maxChildrenPerNode, count, source, offset);
+  }
+}
+
 /**
  * Walks the whole document with an explicit stack of open nodes rather than recursion, so that
  * deeply nested input cannot exhaust the call stack.
  */
-function parseTree(scanner: Scanner): JSXRootNode {
+function parseTree(scanner: Scanner, limits: Limits): JSXRootNode {
   const { source } = scanner;
   const rootStart = scanner.index;
 
@@ -114,10 +174,14 @@ function parseTree(scanner: Scanner): JSXRootNode {
     throw new JSXSyntaxError('Expected the document to start with an element or a fragment', source, rootStart);
   }
 
-  const first = readTag(scanner);
+  const first = readTag(scanner, limits);
 
   if (first.kind === TAG_KINDS.CLOSE) {
     throw new JSXSyntaxError('Unexpected closing tag', source, rootStart);
+  }
+
+  if (1 > limits.maxDepth) {
+    throw new JSXLimitError('maxDepth', limits.maxDepth, 1, source, rootStart);
   }
 
   if (first.selfClosing) {
@@ -131,20 +195,32 @@ function parseTree(scanner: Scanner): JSXRootNode {
     const code = source.charCodeAt(scanner.index);
 
     if (code === LEFT_BRACE) {
-      current.node.children.push({ type: 'expression', value: readExpression(scanner) });
+      const exprStart = scanner.index;
+      const value = readExpression(scanner, limits);
+      countNode(limits, source, exprStart);
+      countChild(limits, current.node.children, source, exprStart);
+      current.node.children.push({ type: 'expression', value });
       continue;
     }
 
     if (code !== LESS_THAN) {
-      appendText(current.node.children, readText(scanner));
+      const textStart = scanner.index;
+      appendText(current.node.children, readText(scanner), limits, source, textStart);
       continue;
     }
 
     const tagStart = scanner.index;
-    const tag = readTag(scanner);
+    const tag = readTag(scanner, limits);
 
     if (tag.kind === TAG_KINDS.OPEN) {
+      const depth = ancestors.length + 2;
+
+      if (depth > limits.maxDepth) {
+        throw new JSXLimitError('maxDepth', limits.maxDepth, depth, source, tagStart);
+      }
+
       if (tag.selfClosing) {
+        countChild(limits, current.node.children, source, tagStart);
         current.node.children.push(tag.node);
       } else {
         ancestors.push(current);
@@ -167,6 +243,7 @@ function parseTree(scanner: Scanner): JSXRootNode {
       return current.node;
     }
 
+    countChild(limits, parent.node.children, source, current.openedAt);
     parent.node.children.push(current.node);
     current = parent;
   }
@@ -183,28 +260,29 @@ function makeOpenTag(opts: Omit<OpenTag, 'kind'>): OpenTag {
 }
 
 /** Reads one complete tag, starting at its `<`. */
-function readTag(scanner: Scanner): Tag {
+function readTag(scanner: Scanner, limits: Limits): Tag {
   const tagStart = scanner.index;
   scanner.index += 1;
 
   if (peek(scanner) === SLASH) {
     scanner.index += 1;
-    const name = readTagName(scanner);
+    const name = readTagName(scanner, limits);
     skipWhitespace(scanner);
     expect(scanner, GREATER_THAN, 'Expected `>` to end the closing tag');
 
     return makeCloseTag({ name });
   }
 
-  const name = readTagName(scanner);
+  const name = readTagName(scanner, limits);
 
   if (name === undefined) {
     scanner.index += 1;
+    countNode(limits, scanner.source, tagStart);
 
     return makeOpenTag({ node: { type: 'fragment', children: [] }, selfClosing: false });
   }
 
-  const attributes = readAttributes(scanner, tagStart);
+  const attributes = readAttributes(scanner, tagStart, limits);
   const selfClosing = peek(scanner) === SLASH;
 
   if (selfClosing) {
@@ -212,13 +290,14 @@ function readTag(scanner: Scanner): Tag {
   }
 
   expect(scanner, GREATER_THAN, 'Expected `>` to end the opening tag');
+  countNode(limits, scanner.source, tagStart);
 
   return makeOpenTag({ node: { type: 'element', name, attributes, children: [] }, selfClosing });
 }
 
 /** Returns `undefined` for a fragment's empty tag, and rejects anything else that is not a name. */
-function readTagName(scanner: Scanner): string | undefined {
-  const name = readName(scanner);
+function readTagName(scanner: Scanner, limits: Limits): string | undefined {
+  const name = readName(scanner, limits);
 
   if (name === undefined && peek(scanner) !== GREATER_THAN) {
     throw new JSXSyntaxError('Expected a tag name', scanner.source, scanner.index);
@@ -228,9 +307,10 @@ function readTagName(scanner: Scanner): string | undefined {
 }
 
 /** Reads attributes until the scanner reaches the `/` or `>` that ends the opening tag. */
-function readAttributes(scanner: Scanner, tagStart: number): JSXAttributes {
+function readAttributes(scanner: Scanner, tagStart: number, limits: Limits): JSXAttributes {
   const { source } = scanner;
   const attributes: JSXAttributes = {};
+  let attributeCount = 0;
 
   while (true) {
     skipWhitespace(scanner);
@@ -246,7 +326,7 @@ function readAttributes(scanner: Scanner, tagStart: number): JSXAttributes {
     }
 
     const nameStart = scanner.index;
-    const name = readName(scanner);
+    const name = readName(scanner, limits);
 
     if (name === undefined) {
       throw new JSXSyntaxError('Expected an attribute name', source, nameStart);
@@ -256,12 +336,18 @@ function readAttributes(scanner: Scanner, tagStart: number): JSXAttributes {
       throw new JSXSyntaxError(`Duplicate attribute "${name}"`, source, nameStart);
     }
 
-    defineAttribute(attributes, name, readAttributeValue(scanner));
+    attributeCount += 1;
+
+    if (attributeCount > limits.maxAttributesPerNode) {
+      throw new JSXLimitError('maxAttributesPerNode', limits.maxAttributesPerNode, attributeCount, source, nameStart);
+    }
+
+    defineAttribute(attributes, name, readAttributeValue(scanner, limits));
   }
 }
 
 /** A bare attribute is `true`; otherwise the value is a quoted string or a `{…}` JSON value. */
-function readAttributeValue(scanner: Scanner): JsonValue {
+function readAttributeValue(scanner: Scanner, limits: Limits): JsonValue {
   skipWhitespace(scanner);
 
   if (peek(scanner) !== EQUALS_SIGN) {
@@ -273,11 +359,11 @@ function readAttributeValue(scanner: Scanner): JsonValue {
   const code = peek(scanner);
 
   if (code === LEFT_BRACE) {
-    return readExpression(scanner);
+    return readExpression(scanner, limits);
   }
 
   if (code === DOUBLE_QUOTE || code === SINGLE_QUOTE) {
-    return readQuotedString(scanner, code);
+    return readQuotedString(scanner, code, limits);
   }
 
   throw new JSXSyntaxError('Expected a quoted string or a `{…}` JSON value after `=`', scanner.source, scanner.index);
@@ -290,7 +376,7 @@ function readAttributeValue(scanner: Scanner): JsonValue {
  * The same walk notes whether the slice could hold a number `JSON.stringify` would not write back,
  * so that {@link validateJsonValue} only ever visits the values that could actually need it.
  */
-function readExpression(scanner: Scanner): JsonValue {
+function readExpression(scanner: Scanner, limits: Limits): JsonValue {
   const { source } = scanner;
   const start = scanner.index;
   let index = start + 1;
@@ -338,6 +424,18 @@ function readExpression(scanner: Scanner): JsonValue {
       depth -= 1;
 
       if (depth === 0) {
+        const contentLength = index - start - 1;
+
+        if (contentLength > limits.maxAttributeValueLength) {
+          throw new JSXLimitError(
+            'maxAttributeValueLength',
+            limits.maxAttributeValueLength,
+            contentLength,
+            source,
+            start,
+          );
+        }
+
         scanner.index = index + 1;
 
         return parseJsonValue(source.slice(start + 1, index), source, start, mayHoldUnwritableNumber);
@@ -405,7 +503,7 @@ function validateJsonValue(value: MutableJsonValue, source: string, offset: numb
 }
 
 /** Reads a quoted attribute value. Backslashes are not escapes here; only entities are decoded. */
-function readQuotedString(scanner: Scanner, quote: number): string {
+function readQuotedString(scanner: Scanner, quote: number, limits: Limits): string {
   const { source } = scanner;
   const start = scanner.index + 1;
   let index = start;
@@ -415,6 +513,12 @@ function readQuotedString(scanner: Scanner, quote: number): string {
     const code = source.charCodeAt(index);
 
     if (code === quote) {
+      const length = index - start;
+
+      if (length > limits.maxAttributeValueLength) {
+        throw new JSXLimitError('maxAttributeValueLength', limits.maxAttributeValueLength, length, source, start);
+      }
+
       const raw = source.slice(start, index);
       scanner.index = index + 1;
 
@@ -465,7 +569,7 @@ function readText(scanner: Scanner): string {
   return sawAmpersand ? decodeEntities(normalized) : normalized;
 }
 
-function readName(scanner: Scanner): string | undefined {
+function readName(scanner: Scanner, limits: Limits): string | undefined {
   const { source } = scanner;
   const start = scanner.index;
 
@@ -477,6 +581,12 @@ function readName(scanner: Scanner): string | undefined {
 
   while (index < source.length && isNamePart(source.charCodeAt(index))) {
     index += 1;
+  }
+
+  const length = index - start;
+
+  if (length > limits.maxNameLength) {
+    throw new JSXLimitError('maxNameLength', limits.maxNameLength, length, source, start);
   }
 
   scanner.index = index;
@@ -500,11 +610,13 @@ function defineAttribute(attributes: JSXAttributes, name: string, value: JsonVal
   attributes[name] = value;
 }
 
-function appendText(children: JSXNode[], value: string): void {
+function appendText(children: JSXNode[], value: string, limits: Limits, source: string, offset: number): void {
   if (value.length === 0) {
     return;
   }
 
+  countNode(limits, source, offset);
+  countChild(limits, children, source, offset);
   children.push({ type: 'text', value });
 }
 

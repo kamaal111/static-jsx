@@ -1,3 +1,5 @@
+import type { ParseOptions } from './parser.ts';
+
 /** Base class for every error this package throws, so consumers can catch them as a group. */
 export class StaticJSXError extends Error {
   constructor(message: string) {
@@ -13,8 +15,8 @@ export class StaticJSXError extends Error {
  */
 export class JSXStringifyError extends StaticJSXError {}
 
-/** Thrown when a source string is not valid static JSX. */
-export class JSXSyntaxError extends StaticJSXError {
+/** Base for an error located at a specific point in a source string, with a line, column and frame. */
+abstract class LocatedError extends StaticJSXError {
   /** Zero-based index into the source string where the problem was found. */
   readonly offset: number;
   /** One-based line number of {@link offset}. */
@@ -24,7 +26,7 @@ export class JSXSyntaxError extends StaticJSXError {
   /** The offending line with a caret underneath, ready to print. */
   readonly frame: string;
 
-  constructor(reason: string, source: string, offset: number) {
+  protected constructor(reason: string, source: string, offset: number) {
     const location = locate(source, offset);
     const frame = codeFrame(location);
     super(`${reason} (${location.line}:${location.column})\n\n${frame}`);
@@ -32,6 +34,33 @@ export class JSXSyntaxError extends StaticJSXError {
     this.line = location.line;
     this.column = location.column;
     this.frame = frame;
+  }
+}
+
+/** Thrown when a source string is not valid static JSX. */
+export class JSXSyntaxError extends LocatedError {
+  constructor(reason: string, source: string, offset: number) {
+    super(reason, source, offset);
+  }
+}
+
+/** Which `ParseOptions` limit a {@link JSXLimitError} reports. */
+export type JSXLimit = keyof ParseOptions;
+
+/** Thrown when `parse` is given source that exceeds one of its configured `ParseOptions` limits. */
+export class JSXLimitError extends LocatedError {
+  /** Which limit was exceeded. */
+  readonly limit: JSXLimit;
+  /** The configured limit that was exceeded. */
+  readonly limitValue: number;
+  /** The actual value that exceeded {@link limitValue}. */
+  readonly actualValue: number;
+
+  constructor(limit: JSXLimit, limitValue: number, actualValue: number, source: string, offset: number) {
+    super(`Exceeded ${limit} (${limitValue}); found ${actualValue}`, source, offset);
+    this.limit = limit;
+    this.limitValue = limitValue;
+    this.actualValue = actualValue;
   }
 }
 
