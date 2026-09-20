@@ -6,7 +6,7 @@ import {
   type MutableJsonContainer,
   type MutableJsonValue,
 } from './json-values.ts';
-import { isIdentifierPart, isNameStart } from './names.ts';
+import { isAttributeName, isElementName, isIdentifierPart, isNameStart } from './names.ts';
 import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
 import { normalizeText } from './whitespace.ts';
 
@@ -90,6 +90,12 @@ type Tag = OpenTag | CloseTag;
 
 /** Every limit `parse` can enforce. All are unlimited unless given a finite value. */
 export interface ParseOptions {
+  /**
+   * Elements that may appear in the document and, for each, the attributes it may hold. `true`
+   * permits every attribute; an array permits only the listed attributes. Defaults to permitting
+   * every element and attribute.
+   */
+  allowedElements?: Readonly<Record<string, true | readonly string[]>>;
   /** Maximum length of the source string. Defaults to unlimited. */
   maxSourceLength?: number;
   /** Maximum nesting depth of elements and fragments; the root is depth 1. Defaults to unlimited. */
@@ -109,11 +115,19 @@ export interface ParseOptions {
   maxAttributeValueLength?: number;
 }
 
+type AllowedAttributes = true | ReadonlySet<string>;
+
+type AllowedElements = ReadonlyMap<string, AllowedAttributes>;
+
 /** Resolved limits plus the running totals `parse` enforces them against. */
-type Limits = Readonly<Required<ParseOptions>> & { nodeCount: number };
+type Limits = Readonly<Omit<Required<ParseOptions>, 'allowedElements'>> & {
+  readonly allowedElements: AllowedElements | undefined;
+  nodeCount: number;
+};
 
 function resolveLimits(options: ParseOptions | undefined): Limits {
   return {
+    allowedElements: resolveAllowedElements(options?.allowedElements),
     maxSourceLength: options?.maxSourceLength ?? Infinity,
     maxDepth: options?.maxDepth ?? Infinity,
     maxNodes: options?.maxNodes ?? Infinity,
@@ -123,6 +137,44 @@ function resolveLimits(options: ParseOptions | undefined): Limits {
     maxAttributeValueLength: options?.maxAttributeValueLength ?? Infinity,
     nodeCount: 0,
   };
+}
+
+function resolveAllowedElements(value: ParseOptions['allowedElements']): AllowedElements | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || Object(value) !== value || Array.isArray(value) || Function.prototype.isPrototypeOf(value)) {
+    throw new TypeError('allowedElements must be a non-null object that is not an array');
+  }
+
+  return Object.entries(value).reduce((allowedElements, [elementName, attributes]) => {
+    if (!isElementName(elementName)) {
+      throw new TypeError(`allowedElements has an invalid element name: ${JSON.stringify(elementName)}`);
+    }
+
+    if (attributes === true) {
+      return allowedElements.set(elementName, true);
+    }
+
+    if (!Array.isArray(attributes)) {
+      throw new TypeError(`allowedElements[${JSON.stringify(elementName)}] must be true or an array`);
+    }
+
+    const allowedAttributes = attributes.reduce((allowedAttributes, attributeName) => {
+      if (
+        Object.prototype.toString.call(attributeName) !== '[object String]' ||
+        attributeName instanceof String ||
+        !isAttributeName(attributeName)
+      ) {
+        throw new TypeError(`allowedElements[${JSON.stringify(elementName)}] has an invalid attribute name`);
+      }
+
+      return allowedAttributes.add(attributeName);
+    }, new Set<string>());
+
+    return allowedElements.set(elementName, allowedAttributes);
+  }, new Map<string, AllowedAttributes>());
 }
 
 /**
@@ -279,6 +331,7 @@ function readTag(scanner: Scanner, limits: Limits): Tag {
     return makeCloseTag({ name });
   }
 
+  const nameStart = scanner.index;
   const name = readTagName(scanner, limits);
 
   if (name === undefined) {
@@ -288,7 +341,8 @@ function readTag(scanner: Scanner, limits: Limits): Tag {
     return makeOpenTag({ node: { type: 'fragment', children: [] }, selfClosing: false });
   }
 
-  const attributes = readAttributes(scanner, tagStart, limits);
+  const allowedAttributes = allowedAttributesForElement(limits, name, scanner.source, nameStart);
+  const attributes = readAttributes(scanner, tagStart, limits, name, allowedAttributes);
   const selfClosing = peek(scanner) === SLASH;
 
   if (selfClosing) {
@@ -299,6 +353,27 @@ function readTag(scanner: Scanner, limits: Limits): Tag {
   countNode(limits, scanner.source, tagStart);
 
   return makeOpenTag({ node: { type: 'element', name, attributes, children: [] }, selfClosing });
+}
+
+function allowedAttributesForElement(
+  limits: Limits,
+  name: string,
+  source: string,
+  offset: number,
+): AllowedAttributes | undefined {
+  const { allowedElements } = limits;
+
+  if (allowedElements === undefined) {
+    return undefined;
+  }
+
+  const allowedAttributes = allowedElements.get(name);
+
+  if (allowedAttributes === undefined) {
+    throw new JSXSyntaxError(`Element ${JSON.stringify(name)} is not allowed`, source, offset);
+  }
+
+  return allowedAttributes;
 }
 
 /** Returns `undefined` for a fragment's empty tag, and rejects anything else that is not a name. */
@@ -313,7 +388,13 @@ function readTagName(scanner: Scanner, limits: Limits): string | undefined {
 }
 
 /** Reads attributes until the scanner reaches the `/` or `>` that ends the opening tag. */
-function readAttributes(scanner: Scanner, tagStart: number, limits: Limits): JSXAttributes {
+function readAttributes(
+  scanner: Scanner,
+  tagStart: number,
+  limits: Limits,
+  elementName: string,
+  allowedAttributes: AllowedAttributes | undefined,
+): JSXAttributes {
   const { source } = scanner;
   const attributes: JSXAttributes = {};
   let attributeCount = 0;
@@ -340,6 +421,14 @@ function readAttributes(scanner: Scanner, tagStart: number, limits: Limits): JSX
 
     if (Object.hasOwn(attributes, name)) {
       throw new JSXSyntaxError(`Duplicate attribute "${name}"`, source, nameStart);
+    }
+
+    if (allowedAttributes !== undefined && allowedAttributes !== true && !allowedAttributes.has(name)) {
+      throw new JSXSyntaxError(
+        `Attribute ${JSON.stringify(name)} is not allowed on <${elementName}>`,
+        source,
+        nameStart,
+      );
     }
 
     attributeCount += 1;

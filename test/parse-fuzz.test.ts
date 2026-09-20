@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import fc from 'fast-check';
 
 import { PROPERTY_OPTIONS, arbBinaryString, arbTree } from './arbitraries.ts';
+import { syntaxErrorOrUndefined } from './helpers.ts';
 import { JSXSyntaxError } from '../src/errors.ts';
 import { parse } from '../src/parser.ts';
 import { stringify } from '../src/stringify.ts';
@@ -64,18 +65,8 @@ function parseVerdict(source: string): string {
   }
 }
 
-function syntaxErrorFrom(source: string): JSXSyntaxError | undefined {
-  try {
-    parse(source);
-
-    return undefined;
-  } catch (error) {
-    return error instanceof JSXSyntaxError ? error : undefined;
-  }
-}
-
 function offsetVerdict(source: string): string {
-  const error = syntaxErrorFrom(source);
+  const error = syntaxErrorOrUndefined(source);
 
   if (error === undefined) {
     return NOT_REJECTED;
@@ -87,7 +78,7 @@ function offsetVerdict(source: string): string {
 }
 
 function positionVerdict(source: string): string {
-  const error = syntaxErrorFrom(source);
+  const error = syntaxErrorOrUndefined(source);
 
   if (error === undefined) {
     return NOT_REJECTED;
@@ -97,7 +88,7 @@ function positionVerdict(source: string): string {
 }
 
 function frameVerdict(source: string): string {
-  const error = syntaxErrorFrom(source);
+  const error = syntaxErrorOrUndefined(source);
 
   if (error === undefined) {
     return NOT_REJECTED;

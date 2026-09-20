@@ -27,11 +27,27 @@ stringify(tree); // '<card title="Hello" count={3} open>Some text</card>'
 Parses a document holding exactly one root element or fragment. Whitespace around the root is
 ignored. Throws a `JSXSyntaxError` for anything else.
 
-`options` bounds how much a single call will parse, for untrusted input. Every limit is optional
-and unlimited by default:
+`options` can restrict the document grammar and bound how much a single call will parse, for
+untrusted input. Every restriction and limit is optional; omitted options accept every valid element
+name and attribute and impose no limit.
+
+`allowedElements` is a complete element schema. Its keys are the only permitted element names. A
+value of `true` permits every attribute on that element; an array permits only the listed attributes
+(including no attributes for `[]`). Fragments are always permitted.
+
+```ts
+parse('<card title="Hello" open />', {
+  allowedElements: { card: ['title', 'open'] },
+});
+
+parse('<section anything="goes" />', {
+  allowedElements: { section: true },
+});
+```
 
 | Option                    | Bounds                                                                 |
 | ------------------------- | ---------------------------------------------------------------------- |
+| `allowedElements`         | allowed element names and their allowed attributes                     |
 | `maxSourceLength`         | the length of `source`                                                 |
 | `maxDepth`                | nesting depth of elements and fragments; the root is depth 1           |
 | `maxNodes`                | total nodes in the tree — elements, fragments, text and expressions    |
@@ -39,6 +55,11 @@ and unlimited by default:
 | `maxChildrenPerNode`      | children on a single element or fragment                               |
 | `maxNameLength`           | length of a tag or attribute name, including any `.` or `:` separators |
 | `maxAttributeValueLength` | length of a quoted string's contents, or the JSON between `{` and `}`  |
+
+A disallowed element or attribute throws `JSXSyntaxError` at its name. `allowedElements` is also
+validated at runtime: it must be a non-null object (not an array), keys and listed attributes must
+be valid names, and each value must be `true` or an array of strings. Invalid option values throw
+`TypeError`.
 
 Exceeding any of them throws a `JSXLimitError` instead of building the rest of the tree:
 

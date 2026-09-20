@@ -1,3 +1,5 @@
+import { JSXSyntaxError } from '../src/errors.ts';
+import { parse, type ParseOptions } from '../src/parser.ts';
 import type {
   JSXAttributes,
   JSXElement,
@@ -30,4 +32,28 @@ export function asElement(node: JSXNode): JSXElement {
   }
 
   return node;
+}
+
+export function syntaxErrorOrUndefined(source: string, options?: ParseOptions): JSXSyntaxError | undefined {
+  try {
+    parse(source, options);
+  } catch (error) {
+    if (error instanceof JSXSyntaxError) {
+      return error;
+    }
+
+    throw error;
+  }
+
+  return undefined;
+}
+
+export function syntaxErrorFrom(source: string, options?: ParseOptions): JSXSyntaxError {
+  const error = syntaxErrorOrUndefined(source, options);
+
+  if (error === undefined) {
+    throw new Error(`Expected ${JSON.stringify(source)} to be rejected, but it parsed`);
+  }
+
+  return error;
 }

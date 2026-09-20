@@ -10,6 +10,16 @@ describe('parse', () => {
   it('takes its options as an optional second argument', () => {
     expectTypeOf(parse).parameter(1).toEqualTypeOf<ParseOptions | undefined>();
   });
+
+  it('accepts an element schema with unrestricted and restricted attributes', () => {
+    const options = { allowedElements: { card: ['title'], section: true } } satisfies ParseOptions;
+
+    expectTypeOf(options).toExtend<ParseOptions>();
+  });
+
+  it('rejects invalid element schema entry values', () => {
+    expectTypeOf({ allowedElements: { card: false } }).not.toExtend<ParseOptions>();
+  });
 });
 
 describe('stringify', () => {
