@@ -42,6 +42,9 @@
     "test:watch": "vitest",
     "type-check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@kamaalio/kamaal": "^0.9.11"
+  },
   "devDependencies": {
     "@kamaal111/kamaal-quality-config": "^0.0.3",
     "@types/node": "^26.6.1",

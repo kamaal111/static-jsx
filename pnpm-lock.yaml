@@ -165,6 +165,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@kamaalio/kamaal':
+        specifier: ^0.9.11
+        version: 0.9.11
     devDependencies:
       '@kamaal111/kamaal-quality-config':
         specifier: ^0.0.3
@@ -294,6 +298,10 @@ packages:
 
   '@kamaal111/oxlint-plugin-anti-slop@0.0.4':
     resolution: {integrity: sha512-YfHzW4k4t+W6rHUWFfbAN9bJoe5k/stX2KWQ5R/+yL/fh8OflnKj59C1K/qBxU4BAx3+2Bjc/u9w1/DrLsNP3Q==}
+
+  '@kamaalio/kamaal@0.9.11':
+    resolution: {integrity: sha512-zTzGxaPEpaR+vh3D6ck7jHtmg+KAxJ+IjYWDmzcEbavAa28PUR5c/UvOh16WWWWHbBtWoj0XFRdDAtwW05SV7Q==}
+    engines: {node: '>=21'}
 
   '@oxc-project/types@0.150.0':
     resolution: {integrity: sha512-rDS5/31E9HfPl/CIzGrn0DOlvBbXFseQ5URJ9sYMfstbKLD/c6Gm9vmRzRGDdAXyOIL4zmO37lc9RIwYqVruZw==}
@@ -2033,6 +2041,8 @@ snapshots:
   '@kamaal111/oxlint-plugin-anti-slop@0.0.4':
     dependencies:
       '@oxlint/plugins': 1.78.0
+
+  '@kamaalio/kamaal@0.9.11': {}
 
   '@oxc-project/types@0.150.0': {}
 
