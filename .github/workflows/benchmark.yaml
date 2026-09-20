@@ -22,10 +22,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Read pnpm version
+        id: pnpm-version
+        run: echo "version=$(just pnpm-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ steps.pnpm-version.outputs.version }}
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install modules
+        run: just prepare
 
       - name: Check out the base revision
         run: |
