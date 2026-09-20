@@ -10,6 +10,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      typescript: ${{ steps.filter.outputs.typescript }}
+    steps:
+      - name: Git - Checkout
+        uses: actions/checkout@v7
+
+      - name: Filter changed files
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            typescript:
+              - '**/*.ts'
+
   quality:
     name: Quality
     timeout-minutes: 10
@@ -45,6 +63,8 @@ jobs:
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
@@ -78,6 +98,8 @@ jobs:
 
   fuzz:
     name: Fuzz
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
