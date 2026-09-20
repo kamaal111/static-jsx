@@ -1,5 +1,8 @@
 FROM debian:trixie-slim
 
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH=${PNPM_HOME}/bin:${PATH}
+
 RUN apt update && apt install -y zsh curl git vim httpie jq unzip bash sudo
 RUN usermod --shell /usr/bin/zsh root
 
