@@ -2,6 +2,8 @@ name: Benchmark
 
 on:
   pull_request:
+    paths:
+      - '**/*.ts'
 
 permissions:
   contents: read
