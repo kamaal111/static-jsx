@@ -75,3 +75,36 @@ jobs:
 
       - name: Run tests
         run: just test
+
+  fuzz:
+    name: Fuzz
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git - Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Read pnpm version
+        id: pnpm-version
+        run: echo "version=$(just pnpm-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ steps.pnpm-version.outputs.version }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install modules
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the properties on a random seed
+        run: just fuzz

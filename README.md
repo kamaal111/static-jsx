@@ -106,8 +106,9 @@ A `>` inside text is ordinary text, as it is in JSX.
 Every value in the tree is one that survives a JSON round trip, which the parser enforces rather than
 discovers later. A number too large for a double — `{1e400}`, or 309 digits with no exponent at all —
 is a syntax error, because `JSON.stringify` writes it back as `null` and a number would silently
-become something else. `-0` is normalized to `0` for the same reason: JSON writes it as `0`. A number
-that is merely rounded to the nearest double is kept, because the rounded value is what writes back.
+become something else. `-0` is a syntax error for the same reason: `JSON.stringify` writes it as `0`,
+so the sign would be lost on the way out. A number that is merely rounded to the nearest double is
+kept, because the rounded value is what writes back.
 
 Duplicate keys inside a `{…}` JSON value are resolved by `JSON.parse`, so the last one wins. This is
 unlike a duplicate attribute, which is an error.
@@ -152,8 +153,7 @@ have produced, which means:
 - the indent holds only spaces, tabs and line breaks.
 
 `stringify` throws a `JSXStringifyError` for each of those rather than print something that would
-read back as a different tree. The one exception is `-0`, which it writes as `0` just as
-`JSON.stringify` does.
+read back as a different tree.
 
 Nesting has no ceiling. `parse` and `stringify` walk the tree, and the values inside it, with
 explicit stacks, and Node 26 walks JSON iteratively as well, so all three guarantees hold however deep
@@ -168,8 +168,24 @@ Commands live in the `justfile`:
 just         # list every recipe
 just ready   # format check, lint, type-check and the test suite
 just test    # tests with coverage
+just fuzz    # the property tests on a random seed, 20 000 runs each
 just bench   # the benchmarks above
 ```
+
+The suite pairs example tests, which are the readable specification, with property tests built on
+[fast-check](https://github.com/dubzzz/fast-check). The properties assert the round-trip guarantee
+over generated trees and every accepted indent, that `parse` answers arbitrary, truncated and mutated
+input with a tree or a `JSXSyntaxError` and never anything else, that `stringify` either refuses a
+tree or prints one that reads back equal, and the algebraic laws underneath: escaping is undone by
+decoding, whitespace normalization is idempotent, and `isName` accepts exactly the names the parser
+reads back. `just test` runs them on a fixed seed so the gate is reproducible; `just fuzz` widens the
+search.
+
+The `Fuzz` job in CI runs the properties on a new random seed on every push, so a counterexample
+shows up while the change is still in front of someone rather than after it lands. The seed that
+found it is printed in the job log: pass it back to `fc.assert` to reproduce the case, and pin the
+shrunk value as an example test before fixing the cause. `just fuzz 200000` searches wider when a
+change deserves it.
 
 Every pull request is benchmarked against the commit it targets. The `Benchmark` workflow runs both
 revisions on the same runner, three passes each and interleaved, and posts a table of the result as

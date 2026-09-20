@@ -1,8 +1,19 @@
 import { defineConfig } from 'vitest/config';
 
+const DEFAULT_TIMEOUT = 5_000;
+
+const FUZZ_TIMEOUT = 600_000;
+
+function testTimeout(): number {
+  const runs = Number(process.env.FUZZ_RUNS);
+
+  return Number.isInteger(runs) && runs > 0 ? FUZZ_TIMEOUT : DEFAULT_TIMEOUT;
+}
+
 const config = defineConfig({
   test: {
     globals: true,
+    testTimeout: testTimeout(),
     include: ['test/**/*.test.ts'],
     typecheck: {
       enabled: true,

@@ -53,7 +53,7 @@ const PROTOTYPE_KEY = '__proto__';
 /** Digits enough to overflow a double on their own, without an exponent: `1e309` is already `Infinity`. */
 const OVERFLOW_DIGITS = 309;
 
-const UNWRITABLE_NUMBER_REASON = 'Number is too large to be written back, so it would not survive a round trip';
+const UNWRITABLE_NUMBER_REASON = 'Number cannot be written back as itself, so it would not survive a round trip';
 
 const TAG_KINDS = { OPEN: 'open', CLOSE: 'close' } as const;
 
@@ -288,7 +288,7 @@ function readAttributeValue(scanner: Scanner): JsonValue {
  * the single slice between the braces to `JSON.parse`, which rejects everything that is not JSON.
  *
  * The same walk notes whether the slice could hold a number `JSON.stringify` would not write back,
- * so that {@link normalizeJsonValue} only ever visits the values that could actually need it.
+ * so that {@link validateJsonValue} only ever visits the values that could actually need it.
  */
 function readExpression(scanner: Scanner): JsonValue {
   const { source } = scanner;
@@ -366,51 +366,39 @@ function parseJsonValue(text: string, source: string, offset: number, validate: 
     throw new JSXSyntaxError('Expected a single JSON value between `{` and `}`', source, offset);
   }
 
-  return validate ? normalizeJsonValue(value, source, offset) : value;
+  return validate ? validateJsonValue(value, source, offset) : value;
 }
 
 /**
  * Keeps the tree's promise that every value it holds survives a JSON round trip. `JSON.stringify`
- * writes `Infinity` and `NaN` as `null`, which would change the value's very type, so those are
- * rejected; it writes `-0` as `0`, so a negative zero is normalized here rather than changing
- * silently on the way out.
+ * writes `Infinity` and `NaN` as `null` and `-0` as `0`, so all of them are rejected.
  *
  * Nested values are walked with an explicit stack rather than recursion, so that a deeply nested
  * value cannot exhaust the call stack.
  */
-function normalizeJsonValue(value: MutableJsonValue, source: string, offset: number): JsonValue {
+function validateJsonValue(value: MutableJsonValue, source: string, offset: number): JsonValue {
   if (!isJsonContainer(value)) {
     if (isUnwritableNumber(value)) {
       throw new JSXSyntaxError(UNWRITABLE_NUMBER_REASON, source, offset);
     }
 
-    return Object.is(value, -0) ? 0 : value;
+    return value;
   }
 
   const containers: MutableJsonContainer[] = [value];
 
   for (let container = containers.pop(); container !== undefined; container = containers.pop()) {
-    for (const [key, held] of Object.entries(container)) {
+    Object.values(container).forEach(held => {
       if (isJsonContainer(held)) {
         containers.push(held);
-        continue;
+
+        return;
       }
 
       if (isUnwritableNumber(held)) {
         throw new JSXSyntaxError(UNWRITABLE_NUMBER_REASON, source, offset);
       }
-
-      if (!Object.is(held, -0)) {
-        continue;
-      }
-
-      if (Array.isArray(container)) {
-        container[Number(key)] = 0;
-        continue;
-      }
-
-      container[key] = 0;
-    }
+    });
   }
 
   return value;
