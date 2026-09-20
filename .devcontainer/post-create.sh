@@ -14,4 +14,4 @@ curl -fsSL https://get.pnpm.io/install.sh | env \
   SHELL="$(command -v zsh)" \
   sh -
 
-pnpm install --frozen-lockfile
+pnpm install
