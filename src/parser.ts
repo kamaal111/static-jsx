@@ -54,8 +54,6 @@ const RIGHT_BRACE = 0x7d;
 
 const MAX_BMP_CODE_POINT = 0xffff;
 
-const PROTOTYPE_KEY = '__proto__';
-
 /** Digits enough to overflow a double on their own, without an exponent: `1e309` is already `Infinity`. */
 const OVERFLOW_DIGITS = 309;
 
@@ -396,7 +394,7 @@ function readAttributes(
   allowedAttributes: AllowedAttributes | undefined,
 ): JSXAttributes {
   const { source } = scanner;
-  const attributes: JSXAttributes = {};
+  const attributes = makeAttributes();
   let attributeCount = 0;
 
   while (true) {
@@ -437,7 +435,7 @@ function readAttributes(
       throw new JSXLimitError('maxAttributesPerNode', limits.maxAttributesPerNode, attributeCount, source, nameStart);
     }
 
-    defineAttribute(attributes, name, readAttributeValue(scanner, limits));
+    attributes[name] = readAttributeValue(scanner, limits);
   }
 }
 
@@ -779,20 +777,13 @@ function readAttributeName(scanner: Scanner, limits: Limits): string | undefined
   return finishName(scanner, limits, start);
 }
 
-/** Assigns an attribute without letting one named `__proto__` reach the prototype chain. */
-function defineAttribute(attributes: JSXAttributes, name: string, value: JsonValue): void {
-  if (name === PROTOTYPE_KEY) {
-    Object.defineProperty(attributes, PROTOTYPE_KEY, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
-
-    return;
-  }
-
-  attributes[name] = value;
+/**
+ * Attributes are named by the document, so the object holding them must inherit nothing: with no
+ * prototype, `'toString' in attributes` answers about the document rather than about `Object`, and
+ * an attribute named `__proto__` is an ordinary own property with no setter to dodge.
+ */
+function makeAttributes(): JSXAttributes {
+  return Object.create(null);
 }
 
 function appendText(children: JSXNode[], value: string, limits: Limits, source: string, offset: number): void {

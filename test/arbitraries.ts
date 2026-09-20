@@ -1,6 +1,8 @@
 import fc from 'fast-check';
 
 import { element, expression, fragment, text } from './helpers.ts';
+import type { JSXCursor, JSXMatcher } from '../src/cursor.ts';
+import { withAncestor, withChild } from '../src/matchers.ts';
 import type { JSXAttributes, JSXNode, JSXRootNode, JsonValue } from '../src/types.ts';
 
 const FIXED_SEED = 0x2f6e2b1;
@@ -188,7 +190,7 @@ function attributesArbitrary(
       },
     )
     .map(entries => {
-      const attributes: JSXAttributes = {};
+      const attributes: JSXAttributes = Object.create(null);
 
       for (const [name, value] of entries) {
         Object.defineProperty(attributes, name, { value, writable: true, enumerable: true, configurable: true });
@@ -216,6 +218,7 @@ function legalChildren(children: readonly JSXNode[]): JSXNode[] {
 }
 
 interface TreeArbitraries {
+  readonly arbIsFragment: fc.Arbitrary<boolean>;
   readonly arbNodeName: fc.Arbitrary<string>;
   readonly arbAttributeName: fc.Arbitrary<string>;
   readonly arbValue: fc.Arbitrary<JsonValue>;
@@ -233,7 +236,7 @@ function treeArbitrary(parts: TreeArbitraries): fc.Arbitrary<JSXRootNode> {
     ),
     value: fc
       .tuple(
-        fc.boolean(),
+        parts.arbIsFragment,
         parts.arbNodeName,
         attributesArbitrary(parts.arbAttributeName, parts.arbValue),
         fc.array(tie('child'), { maxLength: 4 }).map(parts.makeChildren),
@@ -246,15 +249,18 @@ function treeArbitrary(parts: TreeArbitraries): fc.Arbitrary<JSXRootNode> {
   return node;
 }
 
-export const arbTree = treeArbitrary({
+const LEGAL_TREE_PARTS = {
   arbNodeName: arbElementName,
   arbAttributeName: arbAttributeName,
   arbValue: arbWritableJsonValue,
   arbTextValue: arbText,
   makeChildren: legalChildren,
-});
+} satisfies Omit<TreeArbitraries, 'arbIsFragment'>;
+
+export const arbTree = treeArbitrary({ ...LEGAL_TREE_PARTS, arbIsFragment: fc.boolean() });
 
 export const arbAnyTree = treeArbitrary({
+  arbIsFragment: fc.boolean(),
   arbNodeName: fc.oneof({ weight: 3, arbitrary: arbElementName }, { weight: 1, arbitrary: arbInvalidElementName }),
   arbAttributeName: fc.oneof(
     { weight: 3, arbitrary: arbAttributeName },
@@ -264,3 +270,20 @@ export const arbAnyTree = treeArbitrary({
   arbTextValue: fc.oneof({ weight: 3, arbitrary: arbText }, { weight: 1, arbitrary: fc.constant('') }),
   makeChildren: children => [...children],
 });
+
+/** Trees weighted towards fragments, so the transparency rules are exercised rather than assumed. */
+export const arbFragmentHeavyTree = treeArbitrary({
+  ...LEGAL_TREE_PARTS,
+  arbIsFragment: fc.oneof({ weight: 3, arbitrary: fc.constant(true) }, { weight: 1, arbitrary: fc.constant(false) }),
+});
+
+/** A small fixed set of matchers, written the way a caller would write them. */
+export const arbMatcher: fc.Arbitrary<JSXMatcher> = fc.constantFrom(
+  (cursor: JSXCursor) => cursor.node.type === 'element',
+  (cursor: JSXCursor) => cursor.node.type === 'fragment',
+  (cursor: JSXCursor) => cursor.node.type === 'text',
+  (cursor: JSXCursor) => cursor.node.type === 'element' && cursor.node.name === 'a',
+  (cursor: JSXCursor) => cursor.node.type === 'element' && Object.hasOwn(cursor.node.attributes, 'a'),
+  withAncestor(cursor => cursor.node.type === 'fragment'),
+  withChild(cursor => cursor.node.type === 'element'),
+);
