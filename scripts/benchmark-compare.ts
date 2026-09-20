@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -120,7 +121,7 @@ function buildReport(order: string[], samples: Map<string, Samples>, passes: num
     '',
     `<sub>Median of ${passes} interleaved passes on this runner, ${duration} ms per case per pass. ` +
       '“—” means the two sample ranges overlap, so the difference is runner noise rather than code. ' +
-      'This comment never fails the build.</sub>',
+      'A slower result never fails the build.</sub>',
     '',
   ].join('\n');
 }
@@ -170,11 +171,17 @@ for (let pass = 1; pass <= passes; pass += 1) {
   record('head', runBenchmark(headScript, duration));
 }
 
-const report =
-  order.length === 0
-    ? '### Benchmark\n\nThe benchmark could not be run for this pull request.\n'
-    : buildReport(order, samples, passes, duration);
+const measuredHead = order.length > 0;
+
+const report = measuredHead
+  ? buildReport(order, samples, passes, duration)
+  : '### Benchmark\n\nThe benchmark could not be run for this pull request.\n';
 
 await fs.writeFile(outputPath, report, 'utf8');
 
 console.log(`\n${report}`);
+
+/** A base that cannot be measured is expected on an old revision; a head that cannot is a break. */
+if (!measuredHead) {
+  process.exitCode = 1;
+}
