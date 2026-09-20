@@ -19,7 +19,8 @@
         "aaron-bond.better-comments",
         "vitest.explorer",
         "anthropic.claude-code",
-        "github.vscode-github-actions"
+        "github.vscode-github-actions",
+        "openai.chatgpt"
       ]
     }
   },
