@@ -63,10 +63,56 @@ describe('a name that could not be read back', () => {
     expect(() => stringify(element('a', { 0: '1' }))).toThrow(JSXStringifyError);
   });
 
-  it('allows every character a name may hold', () => {
-    const tree = element('x-y.z:_$1', { 'a-b.c:_$2': '1' });
+  it('allows every character a plain element name may hold', () => {
+    const tree = element('x-y_$1');
 
     expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('allows a dotted element name', () => {
+    const tree = element('Foo.Bar');
+
+    expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('allows a namespaced element name', () => {
+    const tree = element('ns:name');
+
+    expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('allows every character a plain attribute name may hold', () => {
+    const tree = element('a', { 'x-y_$1': '1' });
+
+    expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('allows a namespaced attribute name', () => {
+    const tree = element('a', { 'ns:name': '1' });
+
+    expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('allows a name holding non-ASCII Unicode letters, matching the real JSX identifier grammar', () => {
+    const tree = element('日本語', { café: '1' });
+
+    expect(parse(stringify(tree))).toEqual(tree);
+  });
+
+  it('refuses a name starting with an emoji, which is not a Unicode ID_Start character', () => {
+    expect(() => stringify(element('😀'))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses an attribute name holding a dot', () => {
+    expect(() => stringify(element('a', { 'a.b': '1' }))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses a tag name mixing a dot and a colon', () => {
+    expect(() => stringify(element('a.b:c'))).toThrow(JSXStringifyError);
+  });
+
+  it('refuses a tag name with more than one colon', () => {
+    expect(() => stringify(element('a:b:c'))).toThrow(JSXStringifyError);
   });
 });
 

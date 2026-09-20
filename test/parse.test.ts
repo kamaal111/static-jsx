@@ -19,8 +19,33 @@ describe('parse', () => {
       expect(parse('<a><b><c /></b></a>')).toEqual(element('a', {}, [element('b', {}, [element('c')])]));
     });
 
-    it('accepts a name built from letters, digits, dashes, dots, colons, underscores and dollars', () => {
-      expect(parse('<$_A-b.c:d1 />')).toEqual(element('$_A-b.c:d1'));
+    it('accepts a plain identifier built from letters, digits, dashes, underscores and dollars', () => {
+      expect(parse('<$_A-b1 />')).toEqual(element('$_A-b1'));
+    });
+
+    it('accepts a dotted member-expression tag name', () => {
+      expect(parse('<Foo.Bar.Baz />')).toEqual(element('Foo.Bar.Baz'));
+    });
+
+    it('accepts a namespaced tag name', () => {
+      expect(parse('<ns:name />')).toEqual(element('ns:name'));
+    });
+
+    it('accepts a namespaced closing tag name', () => {
+      expect(parse('<ns:name></ns:name>')).toEqual(element('ns:name'));
+    });
+
+    it('accepts a dotted closing tag name', () => {
+      expect(parse('<Foo.Bar></Foo.Bar>')).toEqual(element('Foo.Bar'));
+    });
+
+    it('accepts a tag name holding non-ASCII Unicode letters', () => {
+      expect(parse('<café />')).toEqual(element('café'));
+      expect(parse('<日本語 />')).toEqual(element('日本語'));
+    });
+
+    it('accepts a tag name holding an astral-plane letter', () => {
+      expect(parse('<𝔉oo />')).toEqual(element('𝔉oo'));
     });
 
     it('ignores whitespace around the root', () => {
@@ -43,6 +68,14 @@ describe('parse', () => {
   });
 
   describe('attributes', () => {
+    it('reads a namespaced attribute name', () => {
+      expect(parse('<a ns:name="1" />')).toEqual(element('a', { 'ns:name': '1' }));
+    });
+
+    it('reads an attribute name holding non-ASCII Unicode letters', () => {
+      expect(parse('<a 日本語="1" />')).toEqual(element('a', { 日本語: '1' }));
+    });
+
     it('reads a double-quoted value as a string', () => {
       expect(parse('<a title="Hello" />')).toEqual(element('a', { title: 'Hello' }));
     });
