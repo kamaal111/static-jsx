@@ -1,6 +1,6 @@
-export { JSXStringifyError, JSXSyntaxError, StaticJSXError } from './errors.ts';
+export { JSXLimitError, type JSXLimit, JSXStringifyError, JSXSyntaxError, StaticJSXError } from './errors.ts';
 
-export { parse } from './parser.ts';
+export { parse, type ParseOptions } from './parser.ts';
 
 export { stringify, type StringifyOptions } from './stringify.ts';
 
