@@ -1,10 +1,9 @@
-import { asserts } from '@kamaalio/kamaal';
-
 import { escapeAttribute, escapeText } from './entities.ts';
 import { JSXStringifyError } from './errors.ts';
 import { isJsonContainer, isJsonString, isUnwritableNumber, type JsonContainer } from './json-values.ts';
 import { isName } from './names.ts';
 import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
+import { invariant } from './utils.ts';
 
 const DEFAULT_INDENT = '  ';
 
@@ -335,7 +334,7 @@ function pushObjectEntries(stack: JsonTask[], entries: readonly (readonly [strin
   entries.forEach((_, i, arr) => {
     const item = arr[entries.length - 1 - i];
 
-    asserts.invariant(item !== undefined, 'Invariant detected, item should resolve and never be null');
+    invariant(item !== undefined, 'Invariant detected, item should resolve and never be null');
 
     const [key, value] = item;
 
