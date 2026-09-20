@@ -183,7 +183,7 @@ have produced, which means:
 read back as a different tree.
 
 Nesting has no ceiling by default. `parse` and `stringify` walk the tree, and the values inside it,
-with explicit stacks, and Node 26 walks JSON iteratively as well, so all three guarantees hold however
+with explicit stacks, and Node 22 walks JSON iteratively as well, so all three guarantees hold however
 deep a document goes — a `maxDepth` in `ParseOptions` only ever adds a chosen bound on top of that, it
 is never needed to keep the call stack safe. A value that refers to itself is the one thing
 `JSON.stringify` will not write, and that is reported as a `JSXStringifyError` rather than left to
