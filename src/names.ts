@@ -91,7 +91,7 @@ export function isIdentifierPart(codePoint: number): boolean {
 }
 
 /** Whether a whole string is a single identifier segment: no `.` and no `:`. */
-export function isIdentifier(value: string): boolean {
+function isIdentifier(value: string): boolean {
   if (value.length === 0) {
     return false;
   }
@@ -115,7 +115,7 @@ export function isIdentifier(value: string): boolean {
 }
 
 /** Whether a whole string is a dot-chain of two or more identifiers, e.g. `Foo.Bar.Baz`. */
-export function isMemberExpressionName(value: string): boolean {
+function isMemberExpressionName(value: string): boolean {
   const parts = value.split(PERIOD_CHARACTER);
 
   if (parts.length < 2) {
@@ -126,7 +126,7 @@ export function isMemberExpressionName(value: string): boolean {
 }
 
 /** Whether a whole string is a single `namespace:name` pair. */
-export function isNamespacedName(value: string): boolean {
+function isNamespacedName(value: string): boolean {
   const separatorIndex = value.indexOf(COLON_CHARACTER);
 
   if (separatorIndex === -1 || value.indexOf(COLON_CHARACTER, separatorIndex + 1) !== -1) {

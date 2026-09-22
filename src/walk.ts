@@ -16,13 +16,11 @@ export function* walk(from: JSXRootNode | JSXCursor): Generator<JSXCursor, void,
   for (let cursor = stack.pop(); cursor !== undefined; cursor = stack.pop()) {
     yield cursor;
 
-    const { node } = cursor;
-
-    if (!isParentNode(node)) {
+    if (!isParentNode(cursor.node)) {
       continue;
     }
 
-    const { children } = node;
+    const { children } = cursor.node;
 
     for (let index = children.length - 1; index >= 0; index -= 1) {
       const child: JSXNode | undefined = children[index];

@@ -1,5 +1,19 @@
 import type { ParseOptions } from './parser.ts';
 
+const LINE_FEED = 0x0a;
+
+const CARRIAGE_RETURN = 0x0d;
+
+/** Which `ParseOptions` limit a {@link JSXLimitError} reports. */
+export type JSXLimit = keyof ParseOptions;
+
+interface SourceLocation {
+  readonly offset: number;
+  readonly line: number;
+  readonly column: number;
+  readonly lineText: string;
+}
+
 /** Base class for every error this package throws, so consumers can catch them as a group. */
 export class StaticJSXError extends Error {
   constructor(message: string) {
@@ -44,9 +58,6 @@ export class JSXSyntaxError extends LocatedError {
   }
 }
 
-/** Which `ParseOptions` limit a {@link JSXLimitError} reports. */
-export type JSXLimit = keyof ParseOptions;
-
 /** Thrown when `parse` is given source that exceeds one of its configured `ParseOptions` limits. */
 export class JSXLimitError extends LocatedError {
   /** Which limit was exceeded. */
@@ -63,17 +74,6 @@ export class JSXLimitError extends LocatedError {
     this.actualValue = actualValue;
   }
 }
-
-interface SourceLocation {
-  readonly offset: number;
-  readonly line: number;
-  readonly column: number;
-  readonly lineText: string;
-}
-
-const LINE_FEED = 0x0a;
-
-const CARRIAGE_RETURN = 0x0d;
 
 /** Walks the source once to turn a byte offset into a human-facing line, column and line of text. */
 function locate(source: string, offset: number): SourceLocation {

@@ -7,7 +7,15 @@ import {
   type MutableJsonValue,
 } from './json-values.ts';
 import { isAttributeName, isElementName, isIdentifierPart, isNameStart } from './names.ts';
-import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
+import {
+  JSX_NODE_TYPES,
+  type JSXAttributes,
+  type JSXElement,
+  type JSXFragment,
+  type JSXNode,
+  type JSXRootNode,
+  type JsonValue,
+} from './types.ts';
 import { normalizeText } from './whitespace.ts';
 
 const TAB = 0x09;
@@ -255,7 +263,7 @@ function parseTree(scanner: Scanner, limits: Limits): JSXRootNode {
       const value = readExpression(scanner, limits);
       countNode(limits, source, exprStart);
       countChild(limits, current.node.children, source, exprStart);
-      current.node.children.push({ type: 'expression', value });
+      current.node.children.push({ type: JSX_NODE_TYPES.EXPRESSION, value });
       continue;
     }
 
@@ -286,7 +294,7 @@ function parseTree(scanner: Scanner, limits: Limits): JSXRootNode {
       continue;
     }
 
-    const expectedName = current.node.type === 'element' ? current.node.name : undefined;
+    const expectedName = current.node.type === JSX_NODE_TYPES.ELEMENT ? current.node.name : undefined;
 
     if (tag.name !== expectedName) {
       const reason = `Expected ${closingTagLabel(expectedName)}, but found ${closingTagLabel(tag.name)}`;
@@ -336,7 +344,7 @@ function readTag(scanner: Scanner, limits: Limits): Tag {
     scanner.index += 1;
     countNode(limits, scanner.source, tagStart);
 
-    return makeOpenTag({ node: { type: 'fragment', children: [] }, selfClosing: false });
+    return makeOpenTag({ node: { type: JSX_NODE_TYPES.FRAGMENT, children: [] }, selfClosing: false });
   }
 
   const allowedAttributes = allowedAttributesForElement(limits, name, scanner.source, nameStart);
@@ -359,13 +367,11 @@ function allowedAttributesForElement(
   source: string,
   offset: number,
 ): AllowedAttributes | undefined {
-  const { allowedElements } = limits;
-
-  if (allowedElements === undefined) {
+  if (limits.allowedElements === undefined) {
     return undefined;
   }
 
-  const allowedAttributes = allowedElements.get(name);
+  const allowedAttributes = limits.allowedElements.get(name);
 
   if (allowedAttributes === undefined) {
     throw new JSXSyntaxError(`Element ${JSON.stringify(name)} is not allowed`, source, offset);
@@ -470,7 +476,6 @@ function readAttributeValue(scanner: Scanner, limits: Limits): JsonValue {
  * so that {@link validateJsonValue} only ever visits the values that could actually need it.
  */
 function readExpression(scanner: Scanner, limits: Limits): JsonValue {
-  const { source } = scanner;
   const start = scanner.index;
   let index = start + 1;
   let depth = 1;
@@ -478,8 +483,8 @@ function readExpression(scanner: Scanner, limits: Limits): JsonValue {
   let digitRun = 0;
   let mayHoldUnwritableNumber = false;
 
-  while (index < source.length) {
-    const code = source.charCodeAt(index);
+  while (index < scanner.source.length) {
+    const code = scanner.source.charCodeAt(index);
 
     if (inString) {
       if (code === BACKSLASH) {
@@ -524,20 +529,20 @@ function readExpression(scanner: Scanner, limits: Limits): JsonValue {
             'maxAttributeValueLength',
             limits.maxAttributeValueLength,
             contentLength,
-            source,
+            scanner.source,
             start,
           );
         }
 
         scanner.index = index + 1;
 
-        return parseJsonValue(source.slice(start + 1, index), source, start, mayHoldUnwritableNumber);
+        return parseJsonValue(scanner.source.slice(start + 1, index), scanner.source, start, mayHoldUnwritableNumber);
       }
     } else if (afterDigit && (code === LOWERCASE_E || code === UPPERCASE_E)) {
       // an exponent is the short way to overflow to Infinity, and JSON only ever writes one
       // straight after a digit — so the `e` in `true` and `false` is not one
       mayHoldUnwritableNumber = true;
-    } else if (code === HYPHEN && source.charCodeAt(index + 1) === DIGIT_ZERO) {
+    } else if (code === HYPHEN && scanner.source.charCodeAt(index + 1) === DIGIT_ZERO) {
       // `-0` is the one finite number JSON cannot write back
       mayHoldUnwritableNumber = true;
     }
@@ -545,7 +550,7 @@ function readExpression(scanner: Scanner, limits: Limits): JsonValue {
     index += 1;
   }
 
-  throw new JSXSyntaxError('Unterminated expression', source, start);
+  throw new JSXSyntaxError('Unterminated expression', scanner.source, start);
 }
 
 function parseJsonValue(text: string, source: string, offset: number, validate: boolean): JsonValue {
@@ -597,22 +602,27 @@ function validateJsonValue(value: MutableJsonValue, source: string, offset: numb
 
 /** Reads a quoted attribute value. Backslashes are not escapes here; only entities are decoded. */
 function readQuotedString(scanner: Scanner, quote: number, limits: Limits): string {
-  const { source } = scanner;
   const start = scanner.index + 1;
   let index = start;
   let sawAmpersand = false;
 
-  while (index < source.length) {
-    const code = source.charCodeAt(index);
+  while (index < scanner.source.length) {
+    const code = scanner.source.charCodeAt(index);
 
     if (code === quote) {
       const length = index - start;
 
       if (length > limits.maxAttributeValueLength) {
-        throw new JSXLimitError('maxAttributeValueLength', limits.maxAttributeValueLength, length, source, start);
+        throw new JSXLimitError(
+          'maxAttributeValueLength',
+          limits.maxAttributeValueLength,
+          length,
+          scanner.source,
+          start,
+        );
       }
 
-      const raw = source.slice(start, index);
+      const raw = scanner.source.slice(start, index);
       scanner.index = index + 1;
 
       return sawAmpersand ? decodeEntities(raw) : raw;
@@ -625,7 +635,7 @@ function readQuotedString(scanner: Scanner, quote: number, limits: Limits): stri
     index += 1;
   }
 
-  throw new JSXSyntaxError('Unterminated attribute value', source, scanner.index);
+  throw new JSXSyntaxError('Unterminated attribute value', scanner.source, scanner.index);
 }
 
 /**
@@ -633,14 +643,13 @@ function readQuotedString(scanner: Scanner, quote: number, limits: Limits): stri
  * `slice`: normalization and entity decoding only run when the run actually contains their triggers.
  */
 function readText(scanner: Scanner): string {
-  const { source } = scanner;
   const start = scanner.index;
   let index = start;
   let sawAmpersand = false;
   let sawLayout = false;
 
-  while (index < source.length) {
-    const code = source.charCodeAt(index);
+  while (index < scanner.source.length) {
+    const code = scanner.source.charCodeAt(index);
 
     if (code === LESS_THAN || code === LEFT_BRACE) {
       break;
@@ -656,7 +665,7 @@ function readText(scanner: Scanner): string {
   }
 
   scanner.index = index;
-  const raw = source.slice(start, index);
+  const raw = scanner.source.slice(start, index);
   const normalized = sawLayout ? normalizeText(raw) : raw;
 
   return sawAmpersand ? decodeEntities(normalized) : normalized;
@@ -669,9 +678,8 @@ function codePointWidth(codePoint: number): number {
 
 /** Reads one identifier segment: no `.`, no `:`. Walks by Unicode code point, not UTF-16 code unit. */
 function readIdentifier(scanner: Scanner): string | undefined {
-  const { source } = scanner;
   const start = scanner.index;
-  const startCodePoint = source.codePointAt(start);
+  const startCodePoint = scanner.source.codePointAt(start);
 
   if (startCodePoint === undefined || !isNameStart(startCodePoint)) {
     return undefined;
@@ -679,8 +687,8 @@ function readIdentifier(scanner: Scanner): string | undefined {
 
   let index = start + codePointWidth(startCodePoint);
 
-  while (index < source.length) {
-    const codePoint = source.codePointAt(index);
+  while (index < scanner.source.length) {
+    const codePoint = scanner.source.codePointAt(index);
 
     if (codePoint === undefined || !isIdentifierPart(codePoint)) {
       break;
@@ -691,19 +699,18 @@ function readIdentifier(scanner: Scanner): string | undefined {
 
   scanner.index = index;
 
-  return source.slice(start, index);
+  return scanner.source.slice(start, index);
 }
 
 /** Enforces `maxNameLength` over the whole name matched since `start`, segments and separators alike. */
 function finishName(scanner: Scanner, limits: Limits, start: number): string {
-  const { source } = scanner;
   const length = scanner.index - start;
 
   if (length > limits.maxNameLength) {
-    throw new JSXLimitError('maxNameLength', limits.maxNameLength, length, source, start);
+    throw new JSXLimitError('maxNameLength', limits.maxNameLength, length, scanner.source, start);
   }
 
-  return source.slice(start, scanner.index);
+  return scanner.source.slice(start, scanner.index);
 }
 
 /**
@@ -711,7 +718,6 @@ function finishName(scanner: Scanner, limits: Limits, start: number): string {
  * `namespace:name` pair — never a mix of `.` and `:`.
  */
 function readElementName(scanner: Scanner, limits: Limits): string | undefined {
-  const { source } = scanner;
   const start = scanner.index;
 
   if (readIdentifier(scanner) === undefined) {
@@ -723,26 +729,26 @@ function readElementName(scanner: Scanner, limits: Limits): string | undefined {
       scanner.index += 1;
 
       if (readIdentifier(scanner) === undefined) {
-        throw new JSXSyntaxError("Expected a name after '.' in a tag name", source, scanner.index);
+        throw new JSXSyntaxError("Expected a name after '.' in a tag name", scanner.source, scanner.index);
       }
     }
 
     if (peek(scanner) === COLON) {
-      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", source, scanner.index);
+      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", scanner.source, scanner.index);
     }
   } else if (peek(scanner) === COLON) {
     scanner.index += 1;
 
     if (readIdentifier(scanner) === undefined) {
-      throw new JSXSyntaxError("Expected a name after ':' in a tag name", source, scanner.index);
+      throw new JSXSyntaxError("Expected a name after ':' in a tag name", scanner.source, scanner.index);
     }
 
     if (peek(scanner) === COLON) {
-      throw new JSXSyntaxError("A tag name cannot hold more than one ':'", source, scanner.index);
+      throw new JSXSyntaxError("A tag name cannot hold more than one ':'", scanner.source, scanner.index);
     }
 
     if (peek(scanner) === PERIOD) {
-      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", source, scanner.index);
+      throw new JSXSyntaxError("A tag name cannot mix '.' and ':'", scanner.source, scanner.index);
     }
   }
 
@@ -751,7 +757,6 @@ function readElementName(scanner: Scanner, limits: Limits): string | undefined {
 
 /** An attribute name is an identifier or a single `namespace:name` pair — never a dot. */
 function readAttributeName(scanner: Scanner, limits: Limits): string | undefined {
-  const { source } = scanner;
   const start = scanner.index;
 
   if (readIdentifier(scanner) === undefined) {
@@ -762,16 +767,16 @@ function readAttributeName(scanner: Scanner, limits: Limits): string | undefined
     scanner.index += 1;
 
     if (readIdentifier(scanner) === undefined) {
-      throw new JSXSyntaxError("Expected a name after ':' in an attribute name", source, scanner.index);
+      throw new JSXSyntaxError("Expected a name after ':' in an attribute name", scanner.source, scanner.index);
     }
 
     if (peek(scanner) === COLON) {
-      throw new JSXSyntaxError("An attribute name cannot hold more than one ':'", source, scanner.index);
+      throw new JSXSyntaxError("An attribute name cannot hold more than one ':'", scanner.source, scanner.index);
     }
   }
 
   if (peek(scanner) === PERIOD) {
-    throw new JSXSyntaxError("An attribute name cannot hold '.'", source, scanner.index);
+    throw new JSXSyntaxError("An attribute name cannot hold '.'", scanner.source, scanner.index);
   }
 
   return finishName(scanner, limits, start);
@@ -793,14 +798,13 @@ function appendText(children: JSXNode[], value: string, limits: Limits, source: 
 
   countNode(limits, source, offset);
   countChild(limits, children, source, offset);
-  children.push({ type: 'text', value });
+  children.push({ type: JSX_NODE_TYPES.TEXT, value });
 }
 
 function skipWhitespace(scanner: Scanner): void {
-  const { source } = scanner;
   let index = scanner.index;
 
-  while (index < source.length && isWhitespace(source.charCodeAt(index))) {
+  while (index < scanner.source.length && isWhitespace(scanner.source.charCodeAt(index))) {
     index += 1;
   }
 
@@ -825,7 +829,7 @@ function isWhitespace(code: number): boolean {
 }
 
 function openingTagLabel(node: JSXElement | JSXFragment): string {
-  return node.type === 'element' ? `<${node.name}>` : '<>';
+  return node.type === JSX_NODE_TYPES.ELEMENT ? `<${node.name}>` : '<>';
 }
 
 function closingTagLabel(name: string | undefined): string {
