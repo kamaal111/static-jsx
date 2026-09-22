@@ -19,7 +19,7 @@ export interface JSXCursor<Node extends JSXNode = JSXNode> {
 }
 
 /** A cursor at a document's root, where there is nothing above and the node can only be a root node. */
-export interface JSXRootCursor extends JSXCursor<JSXRootNode> {
+interface JSXRootCursor extends JSXCursor<JSXRootNode> {
   readonly parent: undefined;
 }
 
@@ -65,27 +65,16 @@ export function ancestorsOf(cursor: JSXCursor): readonly JSXCursor[] {
     ancestors.push(step);
   }
 
-  return ancestors.reverse();
+  return ancestors.toReversed();
 }
 
 /** A cursor for each child, in order. Empty for text and expression nodes. */
 export function childrenOf(cursor: JSXCursor): readonly JSXCursor[] {
-  const { node } = cursor;
-
-  if (!isParentNode(node)) {
+  if (!isParentNode(cursor.node)) {
     return [];
   }
 
-  const cursors: JSXCursor[] = [];
-
-  for (let index = 0; index < node.children.length; index += 1) {
-    const child: JSXNode | undefined = node.children[index];
-
-    invariant(child !== undefined, 'An index below the children length always resolves');
-    cursors.push(makeChildCursor(cursor, child, index));
-  }
-
-  return cursors;
+  return cursor.node.children.map((child, index) => makeChildCursor(cursor, child, index));
 }
 
 /**

@@ -2,7 +2,15 @@ import { escapeAttribute, escapeText } from './entities.ts';
 import { JSXStringifyError } from './errors.ts';
 import { isJsonContainer, isJsonString, isUnwritableNumber, type JsonContainer } from './json-values.ts';
 import { isAttributeName, isElementName } from './names.ts';
-import type { JSXAttributes, JSXElement, JSXFragment, JSXNode, JSXRootNode, JsonValue } from './types.ts';
+import {
+  JSX_NODE_TYPES,
+  type JSXAttributes,
+  type JSXElement,
+  type JSXFragment,
+  type JSXNode,
+  type JSXRootNode,
+  type JsonValue,
+} from './types.ts';
 import { invariant } from './utils.ts';
 
 const DEFAULT_INDENT = '  ';
@@ -103,19 +111,19 @@ export function stringify(node: JSXRootNode, options?: StringifyOptions): string
 }
 
 function writeNode(chunks: string[], stack: WriteTask[], node: JSXNode, depth: number, indentUnit: string): void {
-  if (node.type === 'text') {
+  if (node.type === JSX_NODE_TYPES.TEXT) {
     chunks.push(escapeText(node.value));
 
     return;
   }
 
-  if (node.type === 'expression') {
+  if (node.type === JSX_NODE_TYPES.EXPRESSION) {
     chunks.push(`{${jsonText(node.value)}}`);
 
     return;
   }
 
-  const isElement = node.type === 'element';
+  const isElement = node.type === JSX_NODE_TYPES.ELEMENT;
 
   if (isElement && !isElementName(node.name)) {
     throw new JSXStringifyError(`"${node.name}" cannot be written as an element name`);
@@ -140,15 +148,13 @@ function pushChildren(
   indentUnit: string,
   inline: boolean,
 ): void {
-  const { children } = node;
-
-  stack.push(makeLiteralWriteTask({ text: node.type === 'element' ? `</${node.name}>` : '</>' }));
+  stack.push(makeLiteralWriteTask({ text: node.type === JSX_NODE_TYPES.ELEMENT ? `</${node.name}>` : '</>' }));
 
   if (!inline) {
     stack.push(makeLiteralWriteTask({ text: `\n${indentUnit.repeat(depth)}` }));
   }
 
-  for (const child of children.toReversed()) {
+  for (const child of node.children.toReversed()) {
     stack.push(makeNodeWriteTask({ node: child, depth: depth + 1 }));
 
     if (!inline) {
@@ -167,7 +173,7 @@ function inspectChildren(children: readonly JSXNode[]): boolean {
   let previousWasText = false;
 
   children.forEach(child => {
-    if (child.type !== 'text') {
+    if (child.type !== JSX_NODE_TYPES.TEXT) {
       previousWasText = false;
 
       return;
@@ -193,13 +199,7 @@ function inspectChildren(children: readonly JSXNode[]): boolean {
  * than `Object.keys` does, now that the object it is given has no prototype.
  */
 function attributesText(attributes: JSXAttributes): string {
-  let text = '';
-
-  for (const name of Object.keys(attributes)) {
-    text += attributeText(name, attributes[name]);
-  }
-
-  return text;
+  return Object.keys(attributes).reduce((text, name) => text + attributeText(name, attributes[name]), '');
 }
 
 /**

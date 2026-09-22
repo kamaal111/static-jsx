@@ -59,7 +59,11 @@ export function decodeEntities(raw: string): string {
     ampersand = raw.indexOf(AMPERSAND, ampersand + 1);
   }
 
-  return copiedUpTo === 0 ? raw : decoded + raw.slice(copiedUpTo);
+  if (copiedUpTo === 0) {
+    return raw;
+  }
+
+  return decoded + raw.slice(copiedUpTo);
 }
 
 /** Escapes the characters that would otherwise change the meaning of a text child. */
